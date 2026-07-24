@@ -2,7 +2,8 @@
 # Configuration
 # -------------------------------------------------------------------
 
-V ?=
+CONTAINER_ENGINE ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+V                ?=
 KIND_CLUSTER_NAME ?= praxis-dev
 PROJECT_IMAGE    ?= project:dev
 KUBECTL          ?= kubectl --context kind-$(KIND_CLUSTER_NAME)
@@ -14,8 +15,10 @@ endif
 .PHONY: all build release check clean \
 	test lint fmt doc audit \
 	coverage coverage-check \
+	require-container-engine \
 	images container kind-up kind-down \
 	dev-env dev-push dev-integration \
+	setup-hooks \
 	help
 
 # -------------------------------------------------------------------
@@ -76,12 +79,16 @@ coverage-check:
 # Container
 # -------------------------------------------------------------------
 
-container:
-	podman build -t $(PROJECT_IMAGE) -f Containerfile . || \
-	docker build -t $(PROJECT_IMAGE) -f Containerfile .
+require-container-engine:
+ifndef CONTAINER_ENGINE
+	$(error No container engine found. Install podman or docker)
+endif
 
-images:
-	docker build -t $(PROJECT_IMAGE) -f Containerfile .
+container: | require-container-engine
+	$(CONTAINER_ENGINE) build -t $(PROJECT_IMAGE) -f Containerfile .
+
+images: | require-container-engine
+	$(CONTAINER_ENGINE) build -t $(PROJECT_IMAGE) -f Containerfile .
 
 # -------------------------------------------------------------------
 # KIND
@@ -103,8 +110,8 @@ dev-env: images
 	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) \
 	bash hack/setup-kind.sh
 
-dev-push:
-	docker build -t $(PROJECT_IMAGE) -f Containerfile .
+dev-push: | require-container-engine
+	$(CONTAINER_ENGINE) build -t $(PROJECT_IMAGE) -f Containerfile .
 	kind load docker-image $(PROJECT_IMAGE) --name $(KIND_CLUSTER_NAME)
 
 dev-integration:
@@ -113,12 +120,21 @@ dev-integration:
 	cargo test --features integration -- --ignored $(if $(V),--nocapture,)
 
 # -------------------------------------------------------------------
+# Dev Setup
+# -------------------------------------------------------------------
+
+setup-hooks:
+	@ln -sf ../../.hooks/pre-commit .git/hooks/pre-commit
+	@echo "Git hooks installed"
+
+# -------------------------------------------------------------------
 # Help
 # -------------------------------------------------------------------
 
 help:
 	@echo "Variables:"
 	@echo "  V=1                show test output (--nocapture)"
+	@echo "  CONTAINER_ENGINE   container runtime (auto-detected)"
 	@echo "  KIND_CLUSTER_NAME  KIND cluster name"
 	@echo "  PROJECT_IMAGE      container image tag"
 	@echo ""
@@ -135,16 +151,23 @@ help:
 	@echo "  test             run all tests"
 	@echo ""
 	@echo "Quality:"
-	@echo "  lint             clippy + rustfmt check"
+	@echo "  lint             clippy + rustfmt check + machete"
 	@echo "  fmt              format with nightly rustfmt"
 	@echo "  doc              build docs with warnings denied"
 	@echo "  audit            cargo audit + cargo deny"
 	@echo "  coverage         HTML coverage report"
 	@echo "  coverage-check   fail if line coverage < 80%%"
 	@echo ""
+	@echo "Container:"
+	@echo "  container        build container image"
+	@echo "  images           build container image"
+	@echo ""
 	@echo "KIND:"
 	@echo "  kind-up          create cluster + deploy"
 	@echo "  kind-down        delete cluster"
+	@echo ""
+	@echo "Dev Setup:"
+	@echo "  setup-hooks      install git pre-commit hook"
 	@echo ""
 	@echo "Development:"
 	@echo "  dev-env          create/reuse persistent cluster"
