@@ -13,7 +13,7 @@ is a conventions-and-config template.
 
 ## Requirements
 
-- Rust stable 1.94+
+- Rust stable 1.96+
 - Rust nightly (for `rustfmt`)
 - `cargo-audit`, `cargo-deny` (supply chain safety)
 - `cargo-llvm-cov` (coverage, optional)
