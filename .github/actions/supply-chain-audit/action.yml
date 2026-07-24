@@ -1,0 +1,44 @@
+name: Supply Chain Audit
+description: Run cargo audit and optionally cargo deny for supply chain safety
+
+inputs:
+  rust-version:
+    description: "Stable Rust version to install"
+    required: false
+    default: "1.96.0"
+  run-deny:
+    description: "Run cargo deny check after audit"
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Install stable Rust
+      uses: dtolnay/rust-toolchain@6190aa5fb88a88ee71c12769924bbe63a9ab152e # 1.96.0
+      with:
+        toolchain: ${{ inputs.rust-version }}
+
+    - name: Cache cargo binaries
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cargo/bin
+        key: ${{ runner.os }}-cargo-bin-audit-deny
+
+    - name: Install cargo-audit
+      run: command -v cargo-audit || cargo install cargo-audit --locked
+      shell: bash
+
+    - name: Install cargo-deny
+      if: inputs.run-deny == 'true'
+      run: command -v cargo-deny || cargo install cargo-deny --locked
+      shell: bash
+
+    - name: Run cargo audit
+      run: cargo audit
+      shell: bash
+
+    - name: Run cargo deny
+      if: inputs.run-deny == 'true'
+      run: cargo deny check
+      shell: bash

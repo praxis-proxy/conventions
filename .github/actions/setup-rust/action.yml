@@ -1,0 +1,51 @@
+name: Setup Rust
+description: Install stable Rust toolchain and cache Cargo artifacts
+
+inputs:
+  rust-version:
+    description: "Stable Rust version to install"
+    required: false
+    default: "1.96.0"
+  components:
+    description: "Comma-separated toolchain components (e.g. clippy, llvm-tools-preview)"
+    required: false
+    default: ""
+  cache-suffix:
+    description: "Suffix for cache key uniqueness"
+    required: false
+    default: "cargo"
+  cache-target:
+    description: "Include target/ directory in cache"
+    required: false
+    default: "true"
+  extra-cache-paths:
+    description: "Additional newline-separated paths to cache"
+    required: false
+    default: ""
+  save-always:
+    description: "Save cache even on job failure"
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Install stable Rust
+      uses: dtolnay/rust-toolchain@6190aa5fb88a88ee71c12769924bbe63a9ab152e # 1.96.0
+      with:
+        toolchain: ${{ inputs.rust-version }}
+        components: ${{ inputs.components }}
+
+    - name: Cache Cargo registry and build artifacts
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          ${{ inputs.cache-target == 'true' && 'target' || '' }}
+          ${{ inputs.extra-cache-paths }}
+        key: ${{ runner.os }}-rust-${{ inputs.rust-version }}-${{ inputs.cache-suffix }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-${{ inputs.rust-version }}-${{ inputs.cache-suffix }}-
+        save-always: ${{ inputs.save-always }}
