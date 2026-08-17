@@ -1,0 +1,69 @@
+name: SemVer
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# cargo-semver-checks only analyzes publishable crates; with only
+# publish = false members (like the probe crate) the job is skipped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # SemVer Compliance
+  # ----------------------------------------------------------------------------
+
+  semver:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Detect publishable workspace members
+        id: ws
+        run: |
+          if grep -qE '^members = \[\]$' Cargo.toml; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif ! grep -rL 'publish = false' --include=Cargo.toml crates/ 2>/dev/null | grep -q .; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Rust
+        if: steps.ws.outputs.skip == 'false'
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-suffix: semver
+
+      - name: Cache cargo-semver-checks
+        if: steps.ws.outputs.skip == 'false'
+        id: cache-semver
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-semver-checks
+          key: cargo-semver-checks-${{ runner.os }}
+
+      - name: Install cargo-semver-checks
+        if: steps.ws.outputs.skip == 'false' && steps.cache-semver.outputs.cache-hit != 'true'
+        run: cargo install cargo-semver-checks --locked
+
+      - name: Check SemVer compliance
+        if: steps.ws.outputs.skip == 'false'
+        run: make semver

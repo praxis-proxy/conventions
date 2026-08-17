@@ -96,6 +96,51 @@ jobs:
           fi
 
   # ----------------------------------------------------------------------------
+  # Commit Message Check
+  # ----------------------------------------------------------------------------
+
+  commit-message-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check conventional commit format
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/pr-conventions$'; then
+            echo "skip/pr-conventions label present — skipping commit message check"
+            exit 0
+          fi
+
+          # shellcheck disable=SC2016  # $subject is a jq variable, not shell
+          bad=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" \
+            --paginate --jq '[.[] | select(.parents | length == 1) |
+              (.commit.message | split("\n")[0]) as $subject |
+              select(($subject | test("^(build|chore|ci|docs|feat|fix|perf|refactor|test)(\\([a-z0-9-]+\\))?!?: .+") | not) or ($subject | length > 72)) |
+              "- `\(.sha[:7])`: `\($subject)`"] | join("\n")')
+
+          if [ -n "$bad" ]; then
+            marker="<!-- conventions:commit-message-check -->"
+            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+                --body "${marker}
+          **Non-conforming commit subjects** (expected \`type(scope): summary\`, ≤72 chars, types: build/chore/ci/docs/feat/fix/perf/refactor/test):
+
+          ${bad}
+
+          Amend with \`git commit --amend\` or rewrite with \`git rebase -i\`."
+            fi
+            echo "::error::Commit subjects violate conventional commit format"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
   # DCO Check (Signed-off-by)
   # ----------------------------------------------------------------------------
 

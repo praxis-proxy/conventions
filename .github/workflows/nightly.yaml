@@ -1,0 +1,65 @@
+name: Toolchain Canary
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Weekly build against beta and nightly Rust to see breakage coming before
+# a stable release lands it. Beta failures are real signal; nightly
+# failures are advisory (continue-on-error).
+
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Beta / Nightly Toolchains
+  # ----------------------------------------------------------------------------
+
+  canary:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - toolchain: beta
+            advisory: false
+          - toolchain: nightly
+            advisory: true
+    continue-on-error: ${{ matrix.advisory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Detect workspace members
+        id: ws
+        run: |
+          if grep -qE '^members = \[\]$' Cargo.toml; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install ${{ matrix.toolchain }} toolchain
+        if: steps.ws.outputs.empty == 'false'
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal --component clippy
+
+      - name: Check
+        if: steps.ws.outputs.empty == 'false'
+        run: cargo +${{ matrix.toolchain }} check --workspace --all-targets
+
+      - name: Test
+        if: steps.ws.outputs.empty == 'false'
+        run: cargo +${{ matrix.toolchain }} test --workspace
