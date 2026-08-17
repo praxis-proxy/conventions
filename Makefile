@@ -11,7 +11,8 @@ V                ?=
 PUBLISH_CRATES   := conventions-probe
 
 # Tools verified by check-prereqs before their consuming targets run.
-LINT_CMDS        := cargo cargo-machete typos taplo shellcheck actionlint
+LINT_CMDS        := cargo cargo-machete
+LINT_EXTRA_CMDS  := typos taplo shellcheck actionlint
 AUDIT_CMDS       := cargo-audit cargo-deny
 KIND_CLUSTER_NAME ?= praxis-dev
 PROJECT_IMAGE    ?= project:dev
@@ -24,7 +25,7 @@ endif
 .PHONY: all build release check clean \
 	test mutants lint lint-extra fmt doc audit semver publish-dry-run \
 	coverage coverage-check \
-	check-prereqs check-prereqs-audit check-prereqs-nightly \
+	check-prereqs check-prereqs-extra check-prereqs-audit check-prereqs-nightly \
 	require-container-engine \
 	images container kind-up kind-down \
 	dev-env dev-push dev-integration \
@@ -35,7 +36,7 @@ endif
 # All
 # -------------------------------------------------------------------
 
-all: build fmt lint test audit
+all: build fmt lint lint-extra test audit
 
 # -------------------------------------------------------------------
 # Build
@@ -75,6 +76,14 @@ check-prereqs:
 		}; \
 	done
 
+check-prereqs-extra:
+	@for cmd in $(LINT_EXTRA_CMDS); do \
+		command -v "$$cmd" >/dev/null 2>&1 || { \
+			echo "\"$$cmd\" is not installed — install it before running make (see docs/development.md)" >&2; \
+			exit 1; \
+		}; \
+	done
+
 check-prereqs-audit:
 	@for cmd in $(AUDIT_CMDS); do \
 		command -v "$$cmd" >/dev/null 2>&1 || { \
@@ -93,12 +102,12 @@ check-prereqs-nightly:
 # Quality
 # -------------------------------------------------------------------
 
-lint: check-prereqs check-prereqs-nightly lint-extra
+lint: check-prereqs check-prereqs-nightly
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo +$(NIGHTLY) fmt --all -- --check
 	cargo machete
 
-lint-extra:
+lint-extra: check-prereqs-extra
 	typos
 	taplo fmt --check
 	shellcheck hack/*.sh .hooks/pre-commit
@@ -206,7 +215,7 @@ help:
 	@echo "  PROJECT_IMAGE      container image tag"
 	@echo ""
 	@echo "Top-level:"
-	@echo "  all              build + lint + test + audit"
+	@echo "  all              build + lint + lint-extra + test + audit"
 	@echo ""
 	@echo "Build:"
 	@echo "  build            cargo build --workspace"

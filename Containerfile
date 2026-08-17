@@ -60,7 +60,7 @@ FROM alpine:3.23
 
 LABEL org.opencontainers.image.source="https://github.com/praxis-proxy/conventions" \
     org.opencontainers.image.description="Conventions probe binary" \
-    org.opencontainers.image.licenses="MIT"
+    org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apk add --no-cache ca-certificates \
     && addgroup -S probe \

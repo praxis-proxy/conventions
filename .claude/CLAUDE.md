@@ -32,14 +32,14 @@ make test           # all tests
 make test V=1       # tests with --nocapture
 make mutants        # mutation testing (cargo-mutants)
 make fmt            # format with nightly rustfmt
-make lint           # clippy -D warnings + fmt check + lint-extra
+make lint           # clippy -D warnings + fmt check + machete
 make lint-extra     # typos + taplo + shellcheck + actionlint
 make doc            # docs (warnings denied, private items)
 make audit          # cargo audit + cargo deny check
 make semver         # cargo semver-checks
 make publish-dry-run # package + verify release crates
 make container      # build container image
-make all            # build + fmt + lint + test + audit
+make all            # build + fmt + lint + lint-extra + test + audit
 make coverage       # HTML coverage report
 make coverage-check # fail if lines < 90% or regions < 80%
 ```
