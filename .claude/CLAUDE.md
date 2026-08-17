@@ -30,8 +30,10 @@ make build          # workspace build
 make check          # type-check only (fast)
 make test           # all tests
 make test V=1       # tests with --nocapture
+make mutants        # mutation testing (cargo-mutants)
 make fmt            # format with nightly rustfmt
-make lint           # clippy -D warnings + fmt check
+make lint           # clippy -D warnings + fmt check + lint-extra
+make lint-extra     # typos + taplo + shellcheck + actionlint
 make doc            # docs (warnings denied, private items)
 make audit          # cargo audit + cargo deny check
 make semver         # cargo semver-checks

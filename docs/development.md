@@ -8,6 +8,10 @@
 - `cargo-audit`, `cargo-deny` (supply chain safety)
 - `cargo-llvm-cov` (coverage)
 - `cargo-semver-checks` (SemVer compliance, optional)
+- `cargo-mutants` (mutation testing, optional)
+- `cargo-hack` (feature matrix checks, optional)
+- `typos`, `taplo`, `shellcheck`, `actionlint`
+  (non-Rust lint, required by `make lint`)
 
 ## Conventions
 
@@ -31,6 +35,7 @@ make check
 
 ```console
 make test
+make mutants        # mutation testing (cargo-mutants)
 ```
 
 ### Supply Chain Safety
