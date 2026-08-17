@@ -1,0 +1,125 @@
+name: Release
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Tag-driven release pipeline: validate the tag against the workspace
+# version, run the full test suite, verify crates package cleanly
+# (publish dry run - crates.io publishing stays manual), publish the
+# container image to GHCR, and create the GitHub release.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Validate the tag matches Cargo.toml
+  # ----------------------------------------------------------------------------
+
+  validate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Extract version from tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          TAG_VERSION="${TAG#v}"
+          CARGO_VERSION=$(perl -ne 'print $1 if /^version\s*=\s*"(.+)"/' Cargo.toml)
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml ($CARGO_VERSION)"
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+  # ----------------------------------------------------------------------------
+  # Run the full test suite
+  # ----------------------------------------------------------------------------
+
+  test:
+    needs: [validate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Run all tests
+        run: make test
+
+  # ----------------------------------------------------------------------------
+  # Verify crates package cleanly (publish dry run)
+  # ----------------------------------------------------------------------------
+
+  publish-dry-run:
+    needs: [validate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-suffix: publish
+
+      - name: Publish dry run
+        run: make publish-dry-run
+
+  # ----------------------------------------------------------------------------
+  # Build and publish container image
+  # ----------------------------------------------------------------------------
+
+  container:
+    needs: [validate, test, publish-dry-run]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and publish container
+        uses: ./.github/actions/ghcr-publish
+        with:
+          image-name: ${{ github.repository }}
+
+  # ----------------------------------------------------------------------------
+  # Create GitHub release
+  # ----------------------------------------------------------------------------
+
+  github-release:
+    needs: [validate, container]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --generate-notes

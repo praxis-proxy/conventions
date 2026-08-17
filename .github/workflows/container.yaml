@@ -1,0 +1,40 @@
+name: Container
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Builds the Containerfile and runs the resulting image once. The probe
+# binary runs to completion; a long-running service should instead add a
+# HEALTHCHECK to the Containerfile and wait for healthy status here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions: {}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Build & Run Container
+  # ----------------------------------------------------------------------------
+
+  build-and-run:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build container image
+        run: docker build -t project:ci -f Containerfile .
+
+      - name: Run container
+        run: docker run --rm project:ci

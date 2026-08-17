@@ -1,0 +1,35 @@
+name: Publish
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Manually triggered container publish to GHCR. Run against a semver tag
+# to produce version tags, or against a branch for sha/branch tags.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions: {}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Container Build & Publish
+  # ----------------------------------------------------------------------------
+
+  container:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and publish container
+        uses: ./.github/actions/ghcr-publish
+        with:
+          image-name: ${{ github.repository }}

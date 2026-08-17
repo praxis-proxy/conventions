@@ -98,6 +98,12 @@ Requires `cargo-semver-checks`. Run before releases to
 catch breaking API changes that were not reflected in
 the version bump.
 
+## Releases
+
+See [release.md](./release.md) for versioning, the
+pre-release checklist, tagging, container publishing,
+and the release pipeline.
+
 ## Project Management
 
 All repositories in the `praxis-proxy` organization

@@ -37,6 +37,8 @@ make lint-extra     # typos + taplo + shellcheck + actionlint
 make doc            # docs (warnings denied, private items)
 make audit          # cargo audit + cargo deny check
 make semver         # cargo semver-checks
+make publish-dry-run # package + verify release crates
+make container      # build container image
 make all            # build + fmt + lint + test + audit
 make coverage       # HTML coverage report
 make coverage-check # fail if lines < 90% or regions < 80%

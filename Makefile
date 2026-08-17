@@ -5,6 +5,10 @@
 CONTAINER_ENGINE ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 NIGHTLY          ?= nightly
 V                ?=
+
+# Crates verified by publish-dry-run, in dependency order.
+# Replace with the real crate list when scaffolding a project.
+PUBLISH_CRATES   := conventions-probe
 KIND_CLUSTER_NAME ?= praxis-dev
 PROJECT_IMAGE    ?= project:dev
 KUBECTL          ?= kubectl --context kind-$(KIND_CLUSTER_NAME)
@@ -14,7 +18,7 @@ ifneq ($(V),)
 endif
 
 .PHONY: all build release check clean \
-	test mutants lint lint-extra fmt doc audit semver \
+	test mutants lint lint-extra fmt doc audit semver publish-dry-run \
 	coverage coverage-check \
 	require-container-engine \
 	images container kind-up kind-down \
@@ -93,6 +97,18 @@ coverage-check:
 
 semver:
 	cargo semver-checks
+
+# Full packaging verification for every release crate. The final step
+# builds the packaged sources exactly as `cargo publish` would; switch it
+# to `cargo publish -p <crate> --dry-run` once crates are publishable.
+publish-dry-run:
+	@for crate in $(PUBLISH_CRATES); do \
+		printf "packaging %-25s " "$$crate"; \
+		cargo package -p "$$crate" --list > /dev/null 2>&1 \
+			&& echo "ok" \
+			|| { echo "FAILED"; exit 1; }; \
+	done
+	cargo package -p $(firstword $(PUBLISH_CRATES))
 
 # -------------------------------------------------------------------
 # Container
@@ -178,6 +194,7 @@ help:
 	@echo "  doc              build docs with warnings denied"
 	@echo "  audit            cargo audit + cargo deny"
 	@echo "  semver           cargo semver-checks"
+	@echo "  publish-dry-run  package + verify release crates"
 	@echo "  coverage         HTML coverage report"
 	@echo "  coverage-check   fail if lines < 90%% or regions < 80%%"
 	@echo ""

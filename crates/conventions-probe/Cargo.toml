@@ -1,5 +1,6 @@
 [package]
 name = "conventions-probe"
+description = "Probe crate that verifies the workspace toolchain, lint, and security configuration"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
