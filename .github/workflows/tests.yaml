@@ -99,3 +99,96 @@ jobs:
       - name: Test
         if: steps.ws.outputs.empty == 'false'
         run: make test
+
+  # ----------------------------------------------------------------------------
+  # Meta-lint (markdown, TOML, shell, workflows, spelling)
+  # ----------------------------------------------------------------------------
+  #
+  # Always runs, even with an empty workspace: these gates cover the
+  # template's own configs, docs, and scripts. Tools are fetched as pinned
+  # release binaries; shellcheck is preinstalled on ubuntu runners.
+
+  meta-lint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TYPOS_VERSION: v1.42.1
+      TAPLO_VERSION: "0.10.0"
+      ACTIONLINT_VERSION: "1.7.10"
+      LYCHEE_VERSION: v0.24.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install lint tools
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+          curl -sSL "https://github.com/crate-ci/typos/releases/download/${TYPOS_VERSION}/typos-${TYPOS_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz -C "$HOME/.local/bin" ./typos
+
+          curl -sSL "https://github.com/tamasfe/taplo/releases/download/${TAPLO_VERSION}/taplo-linux-x86_64.gz" \
+            | gunzip > "$HOME/.local/bin/taplo"
+          chmod +x "$HOME/.local/bin/taplo"
+
+          curl -sSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            | tar xz -C "$HOME/.local/bin" actionlint
+
+          curl -sSL "https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz -C "$HOME/.local/bin" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+
+      - name: Lint extra (typos + taplo + shellcheck + actionlint)
+        run: make lint-extra
+
+      - name: Markdown lint
+        run: npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target"
+
+      - name: Link check
+        run: lychee --no-progress README.md LICENSE docs/ .claude/CLAUDE.md
+
+  # ----------------------------------------------------------------------------
+  # Feature matrix (clippy + test per feature combination)
+  # ----------------------------------------------------------------------------
+
+  feature-matrix:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Detect workspace members
+        id: ws
+        run: |
+          if grep -qE '^members = \[\]$' Cargo.toml; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Rust
+        if: steps.ws.outputs.empty == 'false'
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-suffix: features
+
+      - name: Cache cargo-hack
+        if: steps.ws.outputs.empty == 'false'
+        id: cache-hack
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-hack
+          key: cargo-hack-${{ runner.os }}
+
+      - name: Install cargo-hack
+        if: steps.ws.outputs.empty == 'false' && steps.cache-hack.outputs.cache-hit != 'true'
+        run: cargo install cargo-hack --locked
+
+      - name: Clippy each feature
+        if: steps.ws.outputs.empty == 'false'
+        run: cargo hack clippy --workspace --each-feature --all-targets -- -D warnings
+
+      - name: Test each feature
+        if: steps.ws.outputs.empty == 'false'
+        run: cargo hack test --workspace --each-feature

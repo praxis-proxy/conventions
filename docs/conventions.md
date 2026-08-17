@@ -80,6 +80,36 @@ Binary entrypoints (`src/main.rs`) are excluded from
 coverage. Keep them to wiring; all logic belongs in the
 library crate where it is testable and counted.
 
+#### Mutation Testing
+
+Coverage proves code executed; mutation testing
+(`make mutants`, weekly in CI) proves the assertions
+would notice if the code were wrong. cargo-mutants
+rewrites function bodies (return defaults, flip
+operators) and fails if the test suite still passes.
+Treat a surviving mutant as a missing assertion, not
+noise: either strengthen the tests or delete the
+unneeded code.
+
+#### Property-Based Testing
+
+Use `proptest` for code with algebraic invariants:
+parsers (round-trip), arithmetic (commutativity,
+bounds), encodings (encode/decode identity).
+Example-based tests pin known cases; property tests
+search the input space for the case you did not think
+of.
+
+- `proptest!` blocks live inside `#[cfg(test)] mod
+  tests`, after the example-based tests.
+- Property test names state the invariant
+  (`total_is_commutative`), same no-`test_`-prefix rule
+  as other tests.
+- Use `prop_assert!`/`prop_assert_eq!` with messages,
+  like ordinary assertions.
+- Commit `proptest-regressions/` files: they pin found
+  counterexamples as permanent regression tests.
+
 #### Integration Tests
 
 Integration tests that need external infrastructure
@@ -124,6 +154,7 @@ and verify conformance against them.
   ///
   /// [RFC 9110 Section 9.2.1]: https://datatracker.ietf.org/doc/html/rfc9110#section-9.2.1
   ```
+
 - When in doubt about an edge case, the RFC is the
   authority, not other implementations.
 - Add dedicated conformance tests when implementing
@@ -151,7 +182,7 @@ Security is enforced at the lint level. See
 
 #### Lint Suppression Policy
 
-By default, do _not_ suppress lints. Use your best
+By default, do *not* suppress lints. Use your best
 judgement if the situation really calls for it.
 
 Use `#[expect(...)]` instead of `#[allow(...)]`. The
@@ -379,6 +410,7 @@ not at runtime.
   #[serde(deny_unknown_fields, default)]
   pub struct Foo {
   ```
+
 - Place a blank line between attribute blocks.
 - Separate distinct logical actions with blank lines.
   Function calls, variable bindings that begin a new step,
@@ -568,6 +600,22 @@ Before submitting or merging PRs, ensure that you have:
 > these guidelines. They are still expected to be reviewed
 > before submission.
 
+### Commit Messages
+
+Commits follow the conventional commit format, enforced
+by CI:
+
+```text
+type(scope): summary
+```
+
+- Types: `build`, `chore`, `ci`, `docs`, `feat`, `fix`,
+  `perf`, `refactor`, `test`
+- Scope is optional, lowercase, kebab-case
+- Subject line at most 72 characters
+- Body explains what and why when the subject is not
+  enough
+
 ### Pull Request Conventions
 
 Reviewability is enforced by CI
@@ -582,6 +630,8 @@ its code. The gates:
   `skip/pr-conventions` (maintainers only).
 - **Description**: every PR must explain what it does and
   why.
+- **Commit format**: subjects follow the conventional
+  commit format above.
 - **DCO**: every commit carries a `Signed-off-by`
   trailer.
 - **Signed commits**: every commit must be
