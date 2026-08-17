@@ -16,6 +16,7 @@ set -euo pipefail
 CLUSTER_NAME="${KIND_CLUSTER_NAME:-praxis-dev}"
 GWAPI_VERSION="${GWAPI_VERSION:-v1.5.1}"
 METALLB_VERSION="${METALLB_VERSION:-v0.14.9}"
+CONTAINER_ENGINE="${CONTAINER_ENGINE:-$(command -v podman || command -v docker || true)}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 KUBECTL="kubectl --context kind-${CLUSTER_NAME}"
@@ -62,7 +63,7 @@ install_metallb() {
 
 configure_metallb_pool() {
     echo "==> Configuring MetalLB IP pool..."
-    SUBNET=$(docker network inspect kind \
+    SUBNET=$("${CONTAINER_ENGINE}" network inspect kind \
         -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' \
         | tr ' ' '\n' | grep '\.' | head -1)
     IFS='.' read -r a b c d <<< "${SUBNET%%/*}"
@@ -88,12 +89,17 @@ EOF
 # Main
 # ---------------------------------------------------------------------------
 
-for cmd in kind kubectl docker; do
+for cmd in kind kubectl; do
     if ! command -v "${cmd}" &>/dev/null; then
         echo "ERROR: ${cmd} is required but not found"
         exit 1
     fi
 done
+
+if [ -z "${CONTAINER_ENGINE}" ]; then
+    echo "ERROR: no container engine found (install podman or docker)"
+    exit 1
+fi
 
 create_cluster
 install_gateway_api
