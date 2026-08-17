@@ -24,5 +24,8 @@ MD049:
 # MD028: stacked "> **Note**" blockquotes are intentional style
 MD028: false
 
+# MD041: GitHub templates render inside a page and start at h2
+MD041: false
+
 # MD033: YAML frontmatter and tables sometimes need inline HTML in proposals
 MD033: false

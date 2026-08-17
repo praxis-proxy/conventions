@@ -9,6 +9,10 @@ V                ?=
 # Crates verified by publish-dry-run, in dependency order.
 # Replace with the real crate list when scaffolding a project.
 PUBLISH_CRATES   := conventions-probe
+
+# Tools verified by check-prereqs before their consuming targets run.
+LINT_CMDS        := cargo cargo-machete typos taplo shellcheck actionlint
+AUDIT_CMDS       := cargo-audit cargo-deny
 KIND_CLUSTER_NAME ?= praxis-dev
 PROJECT_IMAGE    ?= project:dev
 KUBECTL          ?= kubectl --context kind-$(KIND_CLUSTER_NAME)
@@ -20,6 +24,7 @@ endif
 .PHONY: all build release check clean \
 	test mutants lint lint-extra fmt doc audit semver publish-dry-run \
 	coverage coverage-check \
+	check-prereqs check-prereqs-audit check-prereqs-nightly \
 	require-container-engine \
 	images container kind-up kind-down \
 	dev-env dev-push dev-integration \
@@ -59,10 +64,36 @@ mutants:
 	cargo mutants --workspace
 
 # -------------------------------------------------------------------
+# Prerequisites
+# -------------------------------------------------------------------
+
+check-prereqs:
+	@for cmd in $(LINT_CMDS); do \
+		command -v "$$cmd" >/dev/null 2>&1 || { \
+			echo "\"$$cmd\" is not installed — install it before running make (see docs/development.md)" >&2; \
+			exit 1; \
+		}; \
+	done
+
+check-prereqs-audit:
+	@for cmd in $(AUDIT_CMDS); do \
+		command -v "$$cmd" >/dev/null 2>&1 || { \
+			echo "\"$$cmd\" is not installed — install it before running make (see docs/development.md)" >&2; \
+			exit 1; \
+		}; \
+	done
+
+check-prereqs-nightly:
+	@cargo +$(NIGHTLY) fmt --version >/dev/null 2>&1 || { \
+		echo "nightly rustfmt is not installed — run \"rustup toolchain install $(NIGHTLY) --component rustfmt\" (see docs/development.md)" >&2; \
+		exit 1; \
+	}
+
+# -------------------------------------------------------------------
 # Quality
 # -------------------------------------------------------------------
 
-lint: lint-extra
+lint: check-prereqs check-prereqs-nightly lint-extra
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo +$(NIGHTLY) fmt --all -- --check
 	cargo machete
@@ -73,13 +104,13 @@ lint-extra:
 	shellcheck hack/*.sh .hooks/pre-commit
 	actionlint
 
-fmt:
+fmt: check-prereqs-nightly
 	cargo +$(NIGHTLY) fmt --all
 
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
-audit:
+audit: check-prereqs-audit
 	cargo audit
 	cargo deny check
 

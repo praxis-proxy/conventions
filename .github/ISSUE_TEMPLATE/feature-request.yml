@@ -1,0 +1,27 @@
+# Customize labels and add a project-specific Area dropdown when scaffolding.
+name: Feature Request
+description: Suggest a new feature or enhancement
+labels: ["enhancement", "triage/needs-triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should be added or changed?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this needed?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+  - type: input
+    id: parent-epic
+    attributes:
+      label: Parent Epic (optional)
