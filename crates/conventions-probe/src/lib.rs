@@ -46,4 +46,22 @@ mod tests {
             "overflow must saturate at usize::MAX"
         );
     }
+
+    proptest::proptest! {
+        #[test]
+        fn total_is_commutative(lhs: usize, rhs: usize) {
+            proptest::prop_assert_eq!(
+                saturating_total(lhs, rhs),
+                saturating_total(rhs, lhs),
+                "saturating addition must be commutative"
+            );
+        }
+
+        #[test]
+        fn total_never_shrinks_inputs(lhs: usize, rhs: usize) {
+            let total = saturating_total(lhs, rhs);
+
+            proptest::prop_assert!(total >= lhs.max(rhs), "total {} must be at least max({}, {})", total, lhs, rhs);
+        }
+    }
 }

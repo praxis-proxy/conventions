@@ -4,6 +4,9 @@ target
 # Rustfmt backup files
 **/*.rs.bk
 
+# Cargo mutants output
+**/mutants.out*/
+
 # LLVM coverage artifacts
 coverage/
 coverage.json

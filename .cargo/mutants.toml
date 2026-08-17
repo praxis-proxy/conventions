@@ -1,0 +1,8 @@
+# Mutated code must fail tests, not lints: without cap_lints the deny-all
+# lint wall (e.g. unused_variables) rejects most mutants at compile time,
+# leaving nothing for the test suite to catch.
+cap_lints = true
+
+# Binary entrypoints are wiring, excluded from coverage and mutation alike;
+# logic belongs in the library where tests can kill its mutants.
+exclude_globs = ["**/src/main.rs"]

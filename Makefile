@@ -14,7 +14,7 @@ ifneq ($(V),)
 endif
 
 .PHONY: all build release check clean \
-	test lint fmt doc audit semver \
+	test mutants lint lint-extra fmt doc audit semver \
 	coverage coverage-check \
 	require-container-engine \
 	images container kind-up kind-down \
@@ -51,14 +51,23 @@ clean:
 test:
 	cargo test --workspace $(_NOCAPTURE)
 
+mutants:
+	cargo mutants --workspace
+
 # -------------------------------------------------------------------
 # Quality
 # -------------------------------------------------------------------
 
-lint:
+lint: lint-extra
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo +$(NIGHTLY) fmt --all -- --check
 	cargo machete
+
+lint-extra:
+	typos
+	taplo fmt --check
+	shellcheck hack/*.sh .hooks/pre-commit
+	actionlint
 
 fmt:
 	cargo +$(NIGHTLY) fmt --all
@@ -160,9 +169,11 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  test             run all tests"
+	@echo "  mutants          mutation testing (cargo-mutants)"
 	@echo ""
 	@echo "Quality:"
-	@echo "  lint             clippy + rustfmt check + machete"
+	@echo "  lint             clippy + rustfmt check + machete + lint-extra"
+	@echo "  lint-extra       typos + taplo + shellcheck + actionlint"
 	@echo "  fmt              format with nightly rustfmt"
 	@echo "  doc              build docs with warnings denied"
 	@echo "  audit            cargo audit + cargo deny"
