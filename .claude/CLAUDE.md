@@ -15,8 +15,10 @@ is a conventions-and-config template.
 
 - Rust stable 1.96+
 - Rust nightly (for `rustfmt`)
+- `cargo-machete` (unused dependency detection)
 - `cargo-audit`, `cargo-deny` (supply chain safety)
 - `cargo-llvm-cov` (coverage, optional)
+- `cargo-semver-checks` (SemVer compliance, optional)
 
 ## Commands
 
@@ -29,9 +31,10 @@ make fmt            # format with nightly rustfmt
 make lint           # clippy -D warnings + fmt check
 make doc            # docs (warnings denied, private items)
 make audit          # cargo audit + cargo deny check
+make semver         # cargo semver-checks
 make all            # build + fmt + lint + test + audit
 make coverage       # HTML coverage report
-make coverage-check # fail if line coverage < 80%
+make coverage-check # fail if lines < 90% or regions < 80%
 ```
 
 Single test:

@@ -3,6 +3,7 @@
 # -------------------------------------------------------------------
 
 CONTAINER_ENGINE ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+NIGHTLY          ?= nightly
 V                ?=
 KIND_CLUSTER_NAME ?= praxis-dev
 PROJECT_IMAGE    ?= project:dev
@@ -13,7 +14,7 @@ ifneq ($(V),)
 endif
 
 .PHONY: all build release check clean \
-	test lint fmt doc audit \
+	test lint fmt doc audit semver \
 	coverage coverage-check \
 	require-container-engine \
 	images container kind-up kind-down \
@@ -56,11 +57,11 @@ test:
 
 lint:
 	cargo clippy --workspace --all-targets -- -D warnings
-	cargo +nightly fmt --all -- --check
+	cargo +$(NIGHTLY) fmt --all -- --check
 	cargo machete
 
 fmt:
-	cargo +nightly fmt --all
+	cargo +$(NIGHTLY) fmt --all
 
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
@@ -70,10 +71,17 @@ audit:
 	cargo deny check
 
 coverage:
-	cargo llvm-cov --workspace --html --output-dir target/coverage
+	cargo llvm-cov --workspace --html --output-dir target/coverage \
+		--fail-under-lines 90 \
+		--fail-under-regions 80
 
 coverage-check:
-	cargo llvm-cov --workspace --fail-under-lines 80
+	cargo llvm-cov --workspace \
+		--fail-under-lines 90 \
+		--fail-under-regions 80
+
+semver:
+	cargo semver-checks
 
 # -------------------------------------------------------------------
 # Container
@@ -134,6 +142,7 @@ setup-hooks:
 help:
 	@echo "Variables:"
 	@echo "  V=1                show test output (--nocapture)"
+	@echo "  NIGHTLY            nightly toolchain name for rustfmt"
 	@echo "  CONTAINER_ENGINE   container runtime (auto-detected)"
 	@echo "  KIND_CLUSTER_NAME  KIND cluster name"
 	@echo "  PROJECT_IMAGE      container image tag"
@@ -155,8 +164,9 @@ help:
 	@echo "  fmt              format with nightly rustfmt"
 	@echo "  doc              build docs with warnings denied"
 	@echo "  audit            cargo audit + cargo deny"
+	@echo "  semver           cargo semver-checks"
 	@echo "  coverage         HTML coverage report"
-	@echo "  coverage-check   fail if line coverage < 80%%"
+	@echo "  coverage-check   fail if lines < 90%% or regions < 80%%"
 	@echo ""
 	@echo "Container:"
 	@echo "  container        build container image"
