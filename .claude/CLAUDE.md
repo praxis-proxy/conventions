@@ -8,8 +8,11 @@ repository.
 
 A Rust workspace defining shared conventions, lint
 configuration, and tooling for the praxis-proxy
-project. The workspace has no crate members yet; it
-is a conventions-and-config template.
+project. The only member is `conventions-probe`, a
+minimal lib + bin crate that exists so every quality
+gate (build, lint, doc, test, coverage, audit) runs
+against real code. Replace it with real crates when
+scaffolding a project.
 
 ## Requirements
 

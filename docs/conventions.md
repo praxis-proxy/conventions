@@ -76,6 +76,10 @@ when the happy path executes every line. New code should
 land at or above the floor; the floor only ratchets up,
 never down.
 
+Binary entrypoints (`src/main.rs`) are excluded from
+coverage. Keep them to wiring; all logic belongs in the
+library crate where it is testable and counted.
+
 #### Integration Tests
 
 Integration tests that need external infrastructure

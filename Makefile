@@ -72,11 +72,13 @@ audit:
 
 coverage:
 	cargo llvm-cov --workspace --html --output-dir target/coverage \
+		--ignore-filename-regex 'src/main\.rs' \
 		--fail-under-lines 90 \
 		--fail-under-regions 80
 
 coverage-check:
 	cargo llvm-cov --workspace \
+		--ignore-filename-regex 'src/main\.rs' \
 		--fail-under-lines 90 \
 		--fail-under-regions 80
 
