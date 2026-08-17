@@ -1,0 +1,355 @@
+name: PR Conventions
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Enforces the reviewability rules documented in docs/conventions.md and the
+# proposal process documented in docs/proposals.md. All checks operate through
+# the GitHub API only — PR code is never checked out, so pull_request_target
+# is safe here.
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # PR Size Check
+  # ----------------------------------------------------------------------------
+
+  pr-size-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check PR size
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MAX_ADDITIONS: "750"
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/pr-conventions$'; then
+            echo "skip/pr-conventions label present — skipping size check"
+            exit 0
+          fi
+
+          added=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" --paginate \
+            --jq '[.[] | select(.filename | test("Cargo\\.(lock|toml)$|^(examples/|tests/|benchmarks/|docs/)") | not) | select(.filename | test("\\.md$") | not) | .additions] | add // 0')
+
+          if [ "$added" -gt "$MAX_ADDITIONS" ]; then
+            marker="<!-- conventions:pr-size-check -->"
+            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+                --body "${marker}
+          **PR too large**: ${added} lines added (limit: ${MAX_ADDITIONS}, excludes Cargo files, tests, docs, examples, and benchmarks). Please split into smaller PRs. Add \`skip/pr-conventions\` label to override."
+            fi
+            echo "::error::PR has ${added} lines added (limit: ${MAX_ADDITIONS})"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
+  # PR Description Check
+  # ----------------------------------------------------------------------------
+
+  pr-description-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check for description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/pr-conventions$'; then
+            echo "skip/pr-conventions label present — skipping description check"
+            exit 0
+          fi
+
+          word_count=$(echo "$PR_BODY" | wc -w)
+          if [ "$word_count" -lt 2 ]; then
+            marker="<!-- conventions:pr-description-check -->"
+            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+                --body "${marker}
+          Please add a description to this PR explaining what it does and why. See our [coding conventions](docs/conventions.md)."
+            fi
+            echo "::error::PR has no description"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
+  # DCO Check (Signed-off-by)
+  # ----------------------------------------------------------------------------
+
+  dco-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check Signed-off-by trailers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/pr-conventions$'; then
+            echo "skip/pr-conventions label present — skipping DCO check"
+            exit 0
+          fi
+
+          missing=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" \
+            --paginate --jq '[.[] | select(.parents | length == 1) | select(.commit.message | test("(?m)^Signed-off-by: .+ <.+>$") | not) | .sha[:7]] | join(", ")')
+
+          if [ -n "$missing" ]; then
+            marker="<!-- conventions:dco-check -->"
+            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+                --body "${marker}
+          **Missing \`Signed-off-by\` trailer**: ${missing}. Sign-off asserts you reviewed and understand your changes (see [conventions](docs/conventions.md#code-responsibility)). Amend with \`git commit --amend -s\`."
+            fi
+            echo "::error::Commits missing Signed-off-by: ${missing}"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
+  # Signed Commits Check
+  # ----------------------------------------------------------------------------
+
+  signed-commits-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check signed commits in PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/commit-signing$'; then
+            echo "skip/commit-signing label present — skipping signing check"
+            exit 0
+          fi
+
+          unsigned=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" \
+            --paginate --jq '[.[] | select(.parents | length == 1) | select(.commit.verification.verified == false) | .sha[:7]] | join(", ")')
+
+          if [ -n "$unsigned" ]; then
+            marker="<!-- conventions:signed-commits-check -->"
+            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+                --body "${marker}
+          **Unsigned commits**: ${unsigned}. Please [sign your commits](https://docs.github.com/en/authentication/managing-commit-signature-verification)."
+            fi
+            echo "::error::Unsigned commits found: ${unsigned}"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
+  # Authorship Check
+  # ----------------------------------------------------------------------------
+
+  authorship-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check for AI tool authorship
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/pr-conventions$'; then
+            echo "skip/pr-conventions label present — skipping authorship check"
+            exit 0
+          fi
+
+          commits=$(gh api \
+            "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" \
+            --paginate)
+
+          AI_EMAIL='noreply@anthropic\.com'
+          AI_AUTHOR='claude (code|fable|opus|sonnet|haiku)|\bcopilot\b|\bcodeium\b|\btabnine\b|\bwindsurf\b|\bamazon q\b|\bgemini code\b|\baider\b|\banthropic\b'
+          AI_TOOL='claude|anthropic|copilot|codeium|tabnine|windsurf|cursor|amazon\.q|gemini|aider|noreply@anthropic\.com'
+          CREDIT='^\s*(co-authored-by|assisted-by|generated-by|authored-by)\s*:'
+          ANY_TRAILER='^\s*(co-authored-by|assisted-by|generated-by|authored-by|signed-off-by)\s*:'
+
+          violations=$(echo "$commits" | jq -r \
+            --arg ai_email "$AI_EMAIL" \
+            --arg ai_author "$AI_AUTHOR" \
+            --arg ai_tool "$AI_TOOL" \
+            --arg credit "$CREDIT" \
+            --arg any_trailer "$ANY_TRAILER" '
+            [
+              (.[] | select(.parents | length == 1) |
+                .sha[:7] as $sha |
+                select(
+                  (.commit.author.email |
+                    test($ai_email; "i")) or
+                  (.commit.committer.email |
+                    test($ai_email; "i"))
+                ) |
+                "- `\($sha)`: AI tool email in author/committer"),
+              (.[] | select(.parents | length == 1) |
+                .sha[:7] as $sha |
+                select(
+                  (.commit.author.name |
+                    test($ai_author; "i")) or
+                  (.commit.committer.name |
+                    test($ai_author; "i"))
+                ) |
+                "- `\($sha)`: AI tool in author/committer name"),
+              (.[] | select(.parents | length == 1) |
+                .sha[:7] as $sha |
+                .commit.message | split("\n")[] |
+                select(
+                  (test($any_trailer; "i") and
+                    test($ai_email; "i")) or
+                  (test($credit; "i") and
+                    test($ai_tool; "i"))
+                ) |
+                "- `\($sha)`: `\(gsub("^\\s+"; ""))`")
+            ] | join("\n")
+          ')
+
+          if [ -n "$violations" ]; then
+            marker="<!-- conventions:ai-authorship-check -->"
+            already=$(gh api \
+              "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" \
+                --repo "${{ github.repository }}" \
+                --body "${marker}
+          **Tool authorship detected**:
+
+          ${violations}
+
+          This project doesn't allow commits which are authored or signed-off by tools.
+          Commits need to be authored by and signed-off by the human(s) responsible for the PR, with their name and contact.
+          Please see our development documentation for more details."
+            fi
+            echo "::error::Tool authorship found in PR commits"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
+  # Proposal Check
+  # ----------------------------------------------------------------------------
+
+  proposal-check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Validate proposal files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          if echo "$labels" | grep -q '^skip/proposals$'; then
+            echo "skip/proposals label present — skipping proposal check"
+            exit 0
+          fi
+
+          proposal_files=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" --paginate \
+            --jq '[.[] | select(.filename | startswith("docs/proposals/")) | select(.filename | endswith(".md")) | select(.filename != "docs/proposals/template.md")]')
+
+          count=$(echo "$proposal_files" | jq 'length')
+          if [ "$count" -eq 0 ]; then
+            echo "No proposal files in this PR — skipping"
+            exit 0
+          fi
+
+          errors=""
+
+          while IFS= read -r file; do
+            status=$(echo "$proposal_files" | jq -r --arg f "$file" '.[] | select(.filename == $f) | .status')
+
+            if [ "$status" = "removed" ]; then
+              continue
+            fi
+
+            content=$(gh api "repos/${{ github.repository }}/contents/${file}?ref=$HEAD_SHA" \
+              --jq '.content' | base64 -d)
+
+            frontmatter=$(echo "$content" | sed -n '/^---$/,/^---$/p' | sed '1d;$d')
+
+            discussion=$(echo "$frontmatter" | grep -E '^discussion:' | sed 's/^discussion:[[:space:]]*//')
+            if [ -z "$discussion" ]; then
+              discussion=$(echo "$frontmatter" | awk '/^discussion:/{f=1;next} f && /^  - /{print;exit} f && /^[^ ]/{exit}')
+            fi
+            if [ -z "$discussion" ]; then
+              errors="${errors}\n- \`${file}\`: missing \`discussion\` field in frontmatter"
+            fi
+
+            issue=$(echo "$frontmatter" | grep -E '^issue:' | sed 's/^issue:[[:space:]]*//')
+            if [ -z "$issue" ]; then
+              errors="${errors}\n- \`${file}\`: missing \`issue\` field in frontmatter"
+            fi
+
+            has_authors=$(echo "$frontmatter" | awk '/^authors:/{f=1;next} f && /^  - [^ ]/{print;exit} f && /^[^ ]/{exit}')
+            if [ -z "$has_authors" ]; then
+              errors="${errors}\n- \`${file}\`: missing or empty \`authors\` list in frontmatter"
+            fi
+
+            has_stakeholders=$(echo "$frontmatter" | awk '/^stakeholders:/{f=1;next} f && /^  - [^ ]/{print;exit} f && /^[^ ]/{exit}')
+            if [ -z "$has_stakeholders" ]; then
+              errors="${errors}\n- \`${file}\`: missing or empty \`stakeholders\` list in frontmatter"
+            fi
+
+            if [ "$status" = "added" ]; then
+              proposal_name=$(basename "$file" .md | sed 's/^[0-9][0-9]*_//')
+              renamed_from=$(echo "$proposal_files" | jq -r --arg b "$proposal_name" \
+                '[.[] | select(.status == "removed") | select(.filename | endswith($b + ".md"))] | length')
+              if [ "$renamed_from" -eq 0 ]; then
+                if echo "$content" | grep -qF '## How?'; then
+                  errors="${errors}\n- \`${file}\`: new proposals must not include the \`## How?\` section in the first PR. Submit What? and Why? first; add How? in a follow-up."
+                fi
+              fi
+            fi
+          done < <(echo "$proposal_files" | jq -r '.[].filename')
+
+          if [ -n "$errors" ]; then
+            marker="<!-- conventions:proposal-check -->"
+            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
+            if [ "$already" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+                --body "${marker}
+          **Proposal validation failed**:
+          $(echo -e "$errors")
+          See [proposal process](docs/proposals.md) for requirements."
+            fi
+            echo "::error::Proposal validation failed"
+            exit 1
+          fi

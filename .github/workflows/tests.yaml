@@ -1,0 +1,101 @@
+name: Tests
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Template note: every Rust job is guarded by an empty-workspace check so this
+# workflow passes in the conventions template itself (which has no crate
+# members yet) and activates automatically once the workspace gains members.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Enable verbose test output (V=1)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  V: ${{ inputs.debug && '1' || '' }}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Lint (fmt + clippy + machete)
+  # ----------------------------------------------------------------------------
+
+  lint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Detect workspace members
+        id: ws
+        run: |
+          if grep -qE '^members = \[\]$' Cargo.toml; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Rust (stable + nightly fmt)
+        if: steps.ws.outputs.empty == 'false'
+        uses: ./.github/actions/setup-rust-lint
+
+      - name: Cache cargo-machete
+        if: steps.ws.outputs.empty == 'false'
+        id: cache-machete
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-machete
+          key: cargo-machete-${{ runner.os }}
+
+      - name: Install cargo-machete
+        if: steps.ws.outputs.empty == 'false' && steps.cache-machete.outputs.cache-hit != 'true'
+        run: cargo install cargo-machete --locked
+
+      - name: Lint
+        if: steps.ws.outputs.empty == 'false'
+        run: make lint NIGHTLY=nightly-2026-03-28
+
+  # ----------------------------------------------------------------------------
+  # Build + test
+  # ----------------------------------------------------------------------------
+
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Detect workspace members
+        id: ws
+        run: |
+          if grep -qE '^members = \[\]$' Cargo.toml; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Rust
+        if: steps.ws.outputs.empty == 'false'
+        uses: ./.github/actions/setup-rust
+
+      - name: Test
+        if: steps.ws.outputs.empty == 'false'
+        run: make test

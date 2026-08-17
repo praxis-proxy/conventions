@@ -69,12 +69,16 @@ See the [template] for the full structure.
 > requirements and design writeup is welcome but not
 > required until 1.0.
 
-CI will close PRs that:
+CI will fail PRs that:
 
 - Are missing a `discussion` or `issue` link
 - Have no `authors` listed
 - Have no `stakeholders` listed
 - Include the `How?` section in a new proposal
+
+The check is implemented in
+`.github/workflows/pr-conventions.yaml`. Maintainers can
+override it with the `skip/proposals` label.
 
 [template]: proposals/template.md
 
