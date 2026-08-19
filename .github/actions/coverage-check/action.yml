@@ -6,10 +6,6 @@ inputs:
     description: "Stable Rust version to install"
     required: false
     default: "1.96.0"
-  make-target:
-    description: "Make target that runs the coverage check"
-    required: false
-    default: "coverage-check"
 
 runs:
   using: composite
@@ -46,5 +42,5 @@ runs:
         save-always: true
 
     - name: Run coverage check
-      run: make ${{ inputs.make-target }}
+      run: make coverage-check
       shell: bash
