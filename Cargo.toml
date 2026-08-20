@@ -9,11 +9,11 @@ rust-version = "1.96"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-thiserror = "2.0.18"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.20"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
-tokio = { version = "1.52.3", features = ["macros", "rt"] }
+tokio = { version = "1.53.1", features = ["macros", "rt"] }
 proptest = "1.11.0"
 
 [profile.release]
