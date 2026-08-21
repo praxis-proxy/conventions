@@ -43,7 +43,7 @@ make help           # every available target
 | --- | --- |
 | [conventions.md](docs/conventions.md) | Coding style, testing, type design, lint policy |
 | [development.md](docs/development.md) | Requirements, build/test/coverage commands |
-| [proposals.md](docs/proposals.md) | Proposal lifecycle for larger changes |
+| [enhancements](https://github.com/praxis-proxy/enhancements) | Proposal lifecycle for larger changes |
 | [release.md](docs/release.md) | Versioning, tagging, release pipeline |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor entry point and PR gates |
 

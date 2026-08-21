@@ -1,5 +1,5 @@
 # Epics organize implementation work for an accepted proposal.
-# See docs/proposals.md for the full lifecycle.
+# See https://github.com/praxis-proxy/enhancements for the full lifecycle.
 name: Epic
 description: Track a large body of related work
 labels: ["epic", "triage/needs-triage"]
@@ -8,7 +8,7 @@ body:
     id: discussion
     attributes:
       label: Originating Discussion
-      description: Link to the approved discussion (see docs/proposals.md)
+      description: Link to the approved discussion (see https://github.com/praxis-proxy/enhancements)
     validations:
       required: true
   - type: textarea

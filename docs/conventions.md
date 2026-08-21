@@ -643,5 +643,6 @@ its code. The gates:
   submit, and must know it and understand it prior to
   submission, regardless of what tooling they used to produce it.
 - **Proposals**: proposal files must satisfy the
-  frontmatter and lifecycle rules in
-  [proposals.md](proposals.md).
+  frontmatter and lifecycle rules in the centralized
+  [enhancements](https://github.com/praxis-proxy/enhancements/blob/main/docs/process.md)
+  repository.

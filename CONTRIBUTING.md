@@ -23,7 +23,7 @@ Features that span multiple PRs, introduce new
 architectural patterns, or affect the public interface
 go through the [proposal process].
 
-[proposal process]: docs/proposals.md
+[proposal process]: https://github.com/praxis-proxy/enhancements/blob/main/docs/process.md
 
 ## Pull Request Gates
 
