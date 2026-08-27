@@ -25,6 +25,7 @@ jobs:
   zizmor:
     name: github actions security audit
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       security-events: write
       contents: read
