@@ -22,3 +22,15 @@ updates:
     schedule:
       interval: weekly
       day: monday
+
+  - package-ecosystem: docker
+    directory: /
+    cooldown:
+      default-days: 7
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      # Builder image tracks the MSRV, not Dependabot; allow Alpine patch bumps.
+      - dependency-name: "rust"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
