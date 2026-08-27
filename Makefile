@@ -23,7 +23,7 @@ ifneq ($(V),)
 endif
 
 .PHONY: all build release check clean \
-	test mutants lint lint-extra fmt doc audit semver publish-dry-run \
+	test mutants lint lint-extra fmt doc audit semver publish-dry-run publish \
 	coverage coverage-check \
 	check-prereqs check-prereqs-extra check-prereqs-audit check-prereqs-nightly \
 	require-container-engine \
@@ -150,6 +150,16 @@ publish-dry-run:
 	done
 	cargo package -p $(firstword $(PUBLISH_CRATES))
 
+# Real crates.io publish, in dependency order. Requires a crates.io token
+# in CARGO_REGISTRY_TOKEN (set from the RUST_CRATES_PUBLISH_TOKEN secret in
+# CI). `cargo publish` blocks until each crate is available in the index
+# before the next one publishes.
+publish:
+	@for crate in $(PUBLISH_CRATES); do \
+		echo "publishing $$crate"; \
+		cargo publish -p "$$crate"; \
+	done
+
 # -------------------------------------------------------------------
 # Container
 # -------------------------------------------------------------------
@@ -235,6 +245,7 @@ help:
 	@echo "  audit            cargo audit + cargo deny"
 	@echo "  semver           cargo semver-checks"
 	@echo "  publish-dry-run  package + verify release crates"
+	@echo "  publish          publish release crates to crates.io"
 	@echo "  coverage         HTML coverage report"
 	@echo "  coverage-check   fail if lines < 90%% or regions < 80%%"
 	@echo ""
