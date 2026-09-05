@@ -25,6 +25,9 @@ a project.
 - **Reviewability**: PRs capped at 750 added production
   lines, with required descriptions, conventional
   commits, DCO sign-off, and signed commits
+- **Issue hygiene**: contributors can only self-assign
+  triaged, non-urgent issues; urgent/high-priority and
+  un-triaged work is maintainer-assigned
 - **Everything else**: markdown, TOML, shell, spelling,
   and workflow files are linted too
 

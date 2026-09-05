@@ -17,6 +17,18 @@ Requirements are listed in [docs/development.md].
 
 [docs/development.md]: docs/development.md
 
+## Picking Up an Issue
+
+Only issues a maintainer has triaged (given a milestone
+and added to a project board) are open for contributors
+to take, and only at `Medium` or `Low` priority. Urgent
+and high-priority work is assigned by maintainers. If you
+self-assign something outside these rules, a bot unassigns
+it and points you back here. See [Picking Up Work] for the
+full policy.
+
+[Picking Up Work]: docs/development.md#picking-up-work
+
 ## Larger Changes
 
 Features that span multiple PRs, introduce new

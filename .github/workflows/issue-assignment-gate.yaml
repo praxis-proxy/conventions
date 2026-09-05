@@ -1,0 +1,162 @@
+name: Issue Assignment Gate
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Keeps urgent/high-priority and un-triaged issues from being self-assigned by
+# contributors. When someone who is NOT on a maintainer team assigns an issue
+# (to themselves or anyone else), the assignment is reverted with an
+# explanatory comment unless the issue is safe for contributors to pick up:
+#
+#   1. Priority (native issue field) is NOT one of BLOCKED_PRIORITIES, and
+#   2. The issue is triaged: it has a milestone AND is on a project board.
+#
+# Members of any team in MAINTAINER_TEAMS bypass the gate entirely. The `devs`
+# team is intentionally NOT a maintainer team: developers are contributors here,
+# so add every other reviewing/leadership team to MAINTAINER_TEAMS instead.
+#
+# Everything runs through the GitHub API only; no code is checked out.
+#
+# The praxis-bot GitHub App token needs these permissions for this to work:
+#   - Repository "Issues": read & write   (unassign + comment)
+#   - Organization "Members": read        (team membership lookups)
+#   - Organization/Repository "Projects": read (project-board membership)
+# Priority is read via the org-level Issue Fields API (GA July 2026), so the
+# app installation must be able to read issue field values.
+
+on:
+  issues:
+    types: [assigned]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Assignment Gate
+  # ----------------------------------------------------------------------------
+
+  assignment-gate:
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
+          private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Enforce assignment policy
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ORG: ${{ github.repository_owner }}
+          ISSUE: ${{ github.event.issue.number }}
+          ASSIGNEE: ${{ github.event.assignee.login }}
+          ACTOR: ${{ github.event.sender.login }}
+          # Teams whose members may triage and assign urgent/high or un-triaged
+          # work. Comma-separated slugs. `devs` is deliberately excluded.
+          MAINTAINER_TEAMS: "maintainers"
+          # Native issue field that holds priority, and the option values that
+          # only maintainers may hand out. Matched case-insensitively; add any
+          # other top-tier names your org uses (e.g. Critical, P0).
+          PRIORITY_FIELD_NAME: "Priority"
+          BLOCKED_PRIORITIES: "Urgent,High"
+        run: |
+          set -euo pipefail
+
+          repo_name="${GH_REPO#*/}"
+
+          # --------------------------------------------------------------------
+          # Maintainers bypass the gate.
+          # --------------------------------------------------------------------
+          IFS=',' read -ra teams <<< "$MAINTAINER_TEAMS"
+          for team in "${teams[@]}"; do
+            slug="$(echo "$team" | xargs)"
+            [ -z "$slug" ] && continue
+            state="$(gh api "/orgs/${ORG}/teams/${slug}/memberships/${ACTOR}" \
+              --jq '.state' 2>/dev/null || true)"
+            if [ "$state" = "active" ]; then
+              echo "::notice::${ACTOR} is on maintainer team '${slug}' — allowed"
+              exit 0
+            fi
+          done
+
+          # --------------------------------------------------------------------
+          # Helpers
+          # --------------------------------------------------------------------
+          revert_assignment() {
+            gh issue edit "$ISSUE" --repo "$GH_REPO" \
+              --remove-assignee "$ASSIGNEE"
+          }
+
+          comment_once() {
+            marker="$1"
+            body="$2"
+            already="$(gh api "repos/${GH_REPO}/issues/${ISSUE}/comments" \
+              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")"
+            if [ "$already" -eq 0 ]; then
+              gh issue comment "$ISSUE" --repo "$GH_REPO" \
+                --body "${marker}
+          ${body}"
+            fi
+          }
+
+          # --------------------------------------------------------------------
+          # Rule 1: urgent/high priority is maintainer-assigned only.
+          # --------------------------------------------------------------------
+          values="$(gh api "repos/${GH_REPO}/issues/${ISSUE}/issue-field-values" \
+            -H "X-GitHub-Api-Version: 2026-03-10" 2>/dev/null || echo '[]')"
+          priority="$(echo "$values" | jq -r --arg name "$PRIORITY_FIELD_NAME" \
+            '.[] | select(.issue_field_name == $name) | .single_select_option.name // empty')"
+
+          lc_priority="$(echo "$priority" | tr '[:upper:]' '[:lower:]')"
+          if [ -n "$lc_priority" ]; then
+            IFS=',' read -ra blocked <<< "$BLOCKED_PRIORITIES"
+            for level in "${blocked[@]}"; do
+              lc_level="$(echo "$level" | xargs | tr '[:upper:]' '[:lower:]')"
+              if [ "$lc_priority" = "$lc_level" ]; then
+                echo "::warning::${ISSUE} is ${priority} priority — reverting self-assignment by ${ACTOR}"
+                revert_assignment
+                comment_once "<!-- conventions:issue-assignment-gate:priority -->" \
+          "Sorry @${ASSIGNEE}, this issue is marked **${priority}** priority. Urgent and high-priority work is assigned by a maintainer after triage, so I've unassigned it. Please ask a maintainer to assign it, or pick up a triaged \`medium\`/\`low\` priority issue instead. See the [self-assignment policy](docs/development.md#picking-up-work)."
+                exit 0
+              fi
+            done
+          fi
+
+          # --------------------------------------------------------------------
+          # Rule 2: un-triaged issues (no milestone or no project) are
+          # maintainer-assigned only.
+          # --------------------------------------------------------------------
+          milestone="$(gh api "repos/${GH_REPO}/issues/${ISSUE}" \
+            --jq '.milestone.number // empty' 2>/dev/null || true)"
+
+          # Fail open on API/permission errors: assume a board is present rather
+          # than punish a legitimately triaged issue.
+          project_count="$(gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$num:Int!){repository(owner:$owner,name:$repo){issue(number:$num){projectItems(first:1){totalCount}}}}' \
+            -F owner="$ORG" -F repo="$repo_name" -F num="$ISSUE" \
+            --jq '.data.repository.issue.projectItems.totalCount' 2>/dev/null || echo 1)"
+          case "$project_count" in
+            ''|*[!0-9]*) project_count=1 ;;
+          esac
+
+          if [ -z "$milestone" ] || [ "$project_count" -eq 0 ]; then
+            echo "::warning::${ISSUE} is not triaged (milestone='${milestone}', projectItems=${project_count}) — reverting self-assignment by ${ACTOR}"
+            revert_assignment
+            comment_once "<!-- conventions:issue-assignment-gate:triage -->" \
+          "Sorry @${ASSIGNEE}, this issue hasn't been triaged yet: it needs a **milestone** and a **project board** before it can be picked up, so I've unassigned it. Please ask a maintainer to triage and assign it. Once triaged, contributors can self-assign non-urgent work. See the [self-assignment policy](docs/development.md#picking-up-work)."
+            exit 0
+          fi
+
+          echo "::notice::${ISSUE} is triaged and not high priority — assignment to ${ASSIGNEE} allowed"

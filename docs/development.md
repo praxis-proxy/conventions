@@ -118,21 +118,24 @@ pass). Every issue and pull request should belong to
 a milestone. Milestones provide scope boundaries and
 help answer "what ships together?"
 
-### Priority Labels
+### Priority
 
-Priority labels indicate the order in which work
-within a milestone should be addressed. Every issue
-should have exactly one priority label:
+Priority is a native GitHub **issue field** (a
+single-select field on the issue itself, not a label).
+Every triaged issue should have exactly one priority:
 
-| Label | Description |
+| Priority | Description |
 | --- | --- |
-| `priority/critical` | Must be worked on immediately before anything else |
-| `priority/high` | Needs to be worked on immediately, defer to criticals |
-| `priority/medium` | Resolve after high and critical |
-| `priority/low` | Resolve after all other priority levels |
+| `Urgent` | Must be worked on immediately before anything else |
+| `High` | Needs to be worked on immediately, defer to urgent |
+| `Medium` | Resolve after high and urgent |
+| `Low` | Resolve after all other priority levels |
 
 When picking up work, address issues in priority
-order: critical first, then high, medium, and low.
+order: urgent first, then high, medium, and low.
+Urgent and high-priority work is assigned by a
+maintainer, never self-assigned (see
+[Picking Up Work](#picking-up-work)).
 
 ### Project Boards
 
@@ -140,4 +143,32 @@ GitHub project boards visualize the state of work
 across milestones. Use boards to track issues through
 their lifecycle (backlog, in progress, in review,
 done). Boards are the primary tool for stand-ups and
-status checks.
+status checks. An issue that is not on a board has not
+been triaged.
+
+### Picking Up Work
+
+An issue is **triaged** once a maintainer has given it
+a milestone and added it to a project board. Only
+maintainers triage.
+
+Maintainers, for this purpose, are members of the teams
+listed in `MAINTAINER_TEAMS` in
+`.github/workflows/issue-assignment-gate.yaml`. The
+`devs` team is intentionally *not* a maintainer team;
+developers are contributors here.
+
+Contributors may self-assign an issue only when **both**
+of the following hold:
+
+- It is triaged (has a milestone and is on a board).
+- Its priority is `Medium` or `Low`.
+
+Urgent and high-priority issues, and any un-triaged
+issue, must be assigned by a maintainer. If you assign
+yourself (or someone else) an issue that breaks these
+rules, the [issue assignment gate][gate] workflow
+reverts the assignment and comments explaining why. Ask
+a maintainer to triage or assign it instead.
+
+[gate]: ../.github/workflows/issue-assignment-gate.yaml
