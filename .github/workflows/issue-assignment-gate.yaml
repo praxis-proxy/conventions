@@ -143,6 +143,9 @@ jobs:
 
           # Fail open on API/permission errors: assume a board is present rather
           # than punish a legitimately triaged issue.
+          # $owner/$repo/$num are GraphQL variables bound by the -F flags below,
+          # so the query must stay single-quoted (SC2016 misfires on gh's -f).
+          # shellcheck disable=SC2016
           project_count="$(gh api graphql \
             -f query='query($owner:String!,$repo:String!,$num:Int!){repository(owner:$owner,name:$repo){issue(number:$num){projectItems(first:1){totalCount}}}}' \
             -F owner="$ORG" -F repo="$repo_name" -F num="$ISSUE" \
