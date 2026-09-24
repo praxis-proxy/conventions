@@ -5,6 +5,10 @@ inputs:
   image-name:
     description: "Full image name (e.g. ghcr.io/org/repo)"
     required: true
+  metadata-context:
+    description: 'Metadata source: "workflow" (run context) or "git" (checked-out commit context)'
+    required: false
+    default: "workflow"
   containerfile:
     description: "Path to the Containerfile/Dockerfile"
     required: false
@@ -36,6 +40,7 @@ runs:
       uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
       with:
         images: ${{ inputs.registry }}/${{ inputs.image-name }}
+        context: ${{ inputs.metadata-context }}
         tags: |
           type=sha
           type=ref,event=branch
