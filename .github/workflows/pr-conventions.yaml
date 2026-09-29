@@ -5,9 +5,12 @@ name: PR Conventions
 # ------------------------------------------------------------------------------
 #
 # Enforces the reviewability rules documented in docs/conventions.md. All
-# checks operate through
-# the GitHub API only — PR code is never checked out, so pull_request_target
-# is safe here.
+# checks operate through the GitHub API only; PR code is never checked out.
+#
+# This runs on pull_request, not pull_request_target, so fork and Dependabot
+# PRs get a read-only GITHUB_TOKEN and no Actions secrets. The praxis-bot app
+# token is only needed for the maintainer bypass, so that lookup is skipped
+# whenever the app credentials aren't available and the checks run as normal.
 
 on:
   pull_request:
@@ -31,10 +34,13 @@ jobs:
     timeout-minutes: 10
     permissions:
       pull-requests: write
+    env:
+      # Actions secrets are withheld from fork and Dependabot PRs.
+      BOT_APP_AVAILABLE: ${{ secrets.PRAXIS_BOT_APP_ID != '' }}
     steps:
       - name: Generate token
         id: app-token
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: env.BOT_APP_AVAILABLE == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
@@ -43,7 +49,7 @@ jobs:
 
       - name: Check maintainer bypass
         id: maintainer-bypass
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: env.BOT_APP_AVAILABLE == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ github.repository_owner }}
@@ -371,10 +377,13 @@ jobs:
     timeout-minutes: 10
     permissions:
       pull-requests: write
+    env:
+      # Actions secrets are withheld from fork and Dependabot PRs.
+      BOT_APP_AVAILABLE: ${{ secrets.PRAXIS_BOT_APP_ID != '' }}
     steps:
       - name: Generate token
         id: app-token
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: env.BOT_APP_AVAILABLE == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
@@ -383,7 +392,7 @@ jobs:
 
       - name: Check maintainer bypass
         id: maintainer-bypass
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: env.BOT_APP_AVAILABLE == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ github.repository_owner }}
