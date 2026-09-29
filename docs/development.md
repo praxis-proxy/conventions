@@ -154,9 +154,8 @@ maintainers triage.
 
 Maintainers, for this purpose, are members of the teams
 listed in `MAINTAINER_TEAMS` in
-`.github/workflows/issue-triage.yaml`. The
-`devs` team is intentionally *not* a maintainer team;
-developers are contributors here.
+`.github/workflows/issue-triage.yaml`: the same teams
+that bypass the PR size and description checks.
 
 Adding a milestone or a project board does not, on its
 own, triage an issue: only a maintainer can, and only by

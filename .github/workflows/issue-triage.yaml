@@ -18,9 +18,9 @@ name: Issue Triage
 # Once triaged, contributors may self-assign non-urgent work. Urgent and
 # high-priority issues stay maintainer-assigned even after triage.
 #
-# Members of any team in MAINTAINER_TEAMS bypass the gate entirely. The `devs`
-# team is intentionally NOT a maintainer team: developers are contributors here,
-# so add every other reviewing/leadership team to MAINTAINER_TEAMS instead.
+# Members of any team in MAINTAINER_TEAMS bypass the gate entirely. Keep it in
+# step with BYPASS_TEAMS in pr-conventions.yaml. Every slug must be a real team
+# in the org: a missing team matches nobody, so maintainers get reset too.
 #
 # Everything runs through the GitHub API only; no code is checked out.
 #
@@ -83,8 +83,8 @@ jobs:
           ASSIGNEE: ${{ github.event.assignee.login }}
           ACTOR: ${{ github.event.sender.login }}
           # Teams whose members may triage and assign urgent/high or un-triaged
-          # work. Comma-separated slugs. `devs` is deliberately excluded.
-          MAINTAINER_TEAMS: "maintainers"
+          # work. Comma-separated slugs.
+          MAINTAINER_TEAMS: "project-leadership,core-maintainers"
           # Native issue field that holds priority, and the option values that
           # only maintainers may hand out. Matched case-insensitively; add any
           # other top-tier names your org uses (e.g. Critical, P0).
