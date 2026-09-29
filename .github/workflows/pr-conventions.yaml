@@ -11,6 +11,8 @@ name: PR Conventions
 # PRs get a read-only GITHUB_TOKEN and no Actions secrets. The praxis-bot app
 # token is only needed for the maintainer bypass, so that lookup is skipped
 # whenever the app credentials aren't available and the checks run as normal.
+# PR comments are best-effort for the same reason: when one can't be posted,
+# the failing check still says what to fix in its error and job summary.
 
 on:
   pull_request:
@@ -361,7 +363,8 @@ jobs:
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          **PR too large**: ${added} non-test lines added (limit: ${MAX_ADDITIONS}, excludes Cargo files, docs, examples, benchmarks, and all tests including inline #[cfg(test)] code). Please split into smaller PRs. Add \`skip/pr-conventions\` label to override."
+          **PR too large**: ${added} non-test lines added (limit: ${MAX_ADDITIONS}, excludes Cargo files, docs, examples, benchmarks, and all tests including inline #[cfg(test)] code). Please split into smaller PRs. Add \`skip/pr-conventions\` label to override." \
+                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
             echo "::error::PR has ${added} non-test lines added (limit: ${MAX_ADDITIONS})"
             exit 1
@@ -436,7 +439,8 @@ jobs:
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          Please add a description to this PR explaining what it does and why. See our [coding conventions](docs/conventions.md)."
+          Please add a description to this PR explaining what it does and why. See our [coding conventions](docs/conventions.md)." \
+                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
             echo "::error::PR has no description"
             exit 1
@@ -482,8 +486,10 @@ jobs:
 
           ${bad}
 
-          Amend with \`git commit --amend\` or rewrite with \`git rebase -i\`."
+          Amend with \`git commit --amend\` or rewrite with \`git rebase -i\`." \
+                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
+            printf 'Non-conforming commit subjects:\n\n%s\n' "$bad" >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Commit subjects violate conventional commit format"
             exit 1
           fi
@@ -520,7 +526,8 @@ jobs:
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          **Missing \`Signed-off-by\` trailer**: ${missing}. Sign-off asserts you reviewed and understand your changes (see [conventions](docs/conventions.md#code-responsibility)). Amend with \`git commit --amend -s\`."
+          **Missing \`Signed-off-by\` trailer**: ${missing}. Sign-off asserts you reviewed and understand your changes (see [conventions](docs/conventions.md#code-responsibility)). Amend with \`git commit --amend -s\`." \
+                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
             echo "::error::Commits missing Signed-off-by: ${missing}"
             exit 1
@@ -558,7 +565,8 @@ jobs:
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          **Unsigned commits**: ${unsigned}. Please [sign your commits](https://docs.github.com/en/authentication/managing-commit-signature-verification)."
+          **Unsigned commits**: ${unsigned}. Please [sign your commits](https://docs.github.com/en/authentication/managing-commit-signature-verification)." \
+                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
             echo "::error::Unsigned commits found: ${unsigned}"
             exit 1
@@ -649,8 +657,10 @@ jobs:
 
           This project doesn't allow commits which are authored or signed-off by tools.
           Commits need to be authored by and signed-off by the human(s) responsible for the PR, with their name and contact.
-          Please see our development documentation for more details."
+          Please see our development documentation for more details." \
+                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
+            printf 'Tool authorship detected:\n\n%s\n' "$violations" >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Tool authorship found in PR commits"
             exit 1
           fi
