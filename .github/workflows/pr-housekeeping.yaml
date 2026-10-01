@@ -1,0 +1,192 @@
+name: PR Housekeeping
+
+# ------------------------------------------------------------------------------
+# Workflow Settings
+# ------------------------------------------------------------------------------
+#
+# Keeps the open PR list honest: PRs failing a required check are converted to
+# draft, and drafts and ready PRs with no activity for a while are closed. The
+# `skip/stale-close` label keeps a PR open regardless. Everything runs through
+# the GitHub API only; no code is checked out.
+#
+# Other repositories run this same file through workflow_call. The caller job
+# needs `checks: read`, `issues: read` and `pull-requests: write`, and must
+# pass the praxis-bot secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stale-draft-days:
+        description: Days without activity before a draft PR is closed
+        type: number
+        default: 5
+      stale-days:
+        description: Days without activity before a ready PR is closed
+        type: number
+        default: 7
+  workflow_call:
+    inputs:
+      stale-draft-days:
+        description: Days without activity before a draft PR is closed
+        type: number
+        default: 5
+      stale-days:
+        description: Days without activity before a ready PR is closed
+        type: number
+        default: 7
+    secrets:
+      PRAXIS_BOT_APP_ID:
+        description: praxis-bot app ID
+        required: true
+      PRAXIS_BOT_APP_PRIVATE_KEY:
+        description: praxis-bot app private key
+        required: true
+
+permissions: {}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Draft on Failure
+  # ----------------------------------------------------------------------------
+
+  draft-on-failure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      checks: read
+      pull-requests: write
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
+          private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
+
+      - name: Convert failing PRs to draft
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          prs=$(gh pr list --base main --state open --limit 100 \
+            --json number,isDraft \
+            --jq '[.[] | select(.isDraft == false)] | .[].number')
+
+          for number in $prs; do
+            failed=$(gh pr checks "$number" --required --json bucket \
+              --jq '[.[] | select(.bucket == "fail")] | length' 2>/dev/null) || continue
+
+            if [ "$failed" -gt 0 ]; then
+              pr_id=$(gh pr view "$number" --json id --jq '.id')
+              gh api graphql -f query="
+                mutation {
+                  convertPullRequestToDraft(input: {pullRequestId: \"$pr_id\"}) {
+                    pullRequest { isDraft }
+                  }
+                }"
+
+              already_commented=$(gh api "repos/${GH_REPO}/issues/${number}/comments" \
+                --jq '[.[] | select(.body == "Converted to draft: required checks failing.")] | length')
+              if [ "$already_commented" -eq 0 ]; then
+                gh pr comment "$number" --body "Converted to draft: required checks failing."
+              fi
+            fi
+          done
+
+  # ----------------------------------------------------------------------------
+  # Close Stale Draft PRs
+  # ----------------------------------------------------------------------------
+
+  close-stale-drafts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      issues: read
+      pull-requests: write
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
+          private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
+
+      - name: Close inactive draft PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          DAYS: ${{ inputs.stale-draft-days }}
+        run: |
+          threshold=$(date -u -d "${DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+
+          prs=$(gh pr list --base main --state open --limit 100 \
+            --json number,isDraft,labels \
+            --jq '[.[] | select(.isDraft == true) |
+              select(.labels | map(.name) | any(. == "skip/stale-close") | not)
+            ] | .[].number')
+
+          for number in $prs; do
+            last_activity=$(gh api "repos/${GH_REPO}/issues/${number}/timeline" \
+              --paginate \
+              --jq '.[] |
+                select((.event // "") != "labeled" and (.event // "") != "unlabeled") |
+                (.submitted_at // .created_at // .committer.date // empty)' \
+              2>/dev/null | sort | tail -1)
+
+            if [ -z "$last_activity" ]; then
+              last_activity=$(gh pr view "$number" --json createdAt --jq '.createdAt')
+            fi
+
+            if [[ "$last_activity" < "$threshold" ]]; then
+              gh pr close "$number" --comment "Closed: inactive for ${DAYS} days. Please re-open if there's more to do."
+            fi
+          done
+
+  # ----------------------------------------------------------------------------
+  # Close Stale PRs
+  # ----------------------------------------------------------------------------
+
+  close-stale-prs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      issues: read
+      pull-requests: write
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
+          private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
+
+      - name: Close inactive ready PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          DAYS: ${{ inputs.stale-days }}
+        run: |
+          threshold=$(date -u -d "${DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+
+          prs=$(gh pr list --base main --state open --limit 100 \
+            --json number,isDraft,labels \
+            --jq '[.[] | select(.isDraft == false) |
+              select(.labels | map(.name) | any(. == "skip/stale-close") | not)
+            ] | .[].number')
+
+          for number in $prs; do
+            last_activity=$(gh api "repos/${GH_REPO}/issues/${number}/timeline" \
+              --paginate \
+              --jq '.[] |
+                select((.event // "") != "labeled" and (.event // "") != "unlabeled") |
+                (.submitted_at // .created_at // .committer.date // empty)' \
+              2>/dev/null | sort | tail -1)
+
+            if [ -z "$last_activity" ]; then
+              last_activity=$(gh pr view "$number" --json createdAt --jq '.createdAt')
+            fi
+
+            if [[ "$last_activity" < "$threshold" ]]; then
+              gh pr close "$number" --comment "Closed: inactive for ${DAYS} days. Please re-open if there's more to do."
+            fi
+          done

@@ -65,3 +65,34 @@ make help           # every available target
    `deny.toml` licenses for your dependencies
 6. Run `make all` — every gate should pass before the
    first commit
+
+## Reusing the Workflows
+
+Existing repositories can run these workflows without
+copying them. Each one below also accepts
+`workflow_call`, so a repository keeps a short caller
+pinned to a tagged commit of this repository:
+
+| Workflow | Inputs |
+| --- | --- |
+| `pr-conventions.yaml` | `max-additions`, `bypass-teams`, `conventions-doc`, `commit-subject-pattern`, `commit-subject-max-length`, `dco-check`, `dep-version-check` |
+| `pr-housekeeping.yaml` | `stale-draft-days`, `stale-days` |
+| `issue-triage.yaml` | `maintainer-teams`, `priority-field-name`, `blocked-priorities`, `policy-doc` |
+| `automated-review.yaml` | `pr_number`, `model`, `prompt-path`, `cloud-ml-region`, `gcp-project-id` |
+| `publish-dry-run.yaml` | `make-args` |
+| `coverage.yaml`, `msrv.yaml`, `mutants.yaml`, `semver.yaml`, `supply-chain.yaml` | none |
+
+```yaml
+jobs:
+  coverage:
+    permissions:
+      contents: read
+    uses: praxis-proxy/conventions/.github/workflows/coverage.yaml@<sha> # v0.3.0
+```
+
+The caller picks the triggers, grants the permissions
+the called jobs ask for, and passes secrets explicitly.
+Leave `concurrency` to the called workflow. Status
+checks are reported as `<caller job> / <job>`, so
+update any required checks in branch rules when a
+repository switches over.

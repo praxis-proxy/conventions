@@ -18,11 +18,22 @@ name: Issue Triage
 # Once triaged, contributors may self-assign non-urgent work. Urgent and
 # high-priority issues stay maintainer-assigned even after triage.
 #
+# When a maintainer gives an issue a milestone, `triage/needs-triage` is
+# swapped for `triage/accepted`. `triage/accepted` is sticky: removing the
+# milestone later does not take it away, and a new issue that already carries
+# it is not flagged for triage.
+#
 # Members of any team in MAINTAINER_TEAMS bypass the gate entirely. Keep it in
 # step with BYPASS_TEAMS in pr-conventions.yaml. Every slug must be a real team
 # in the org: a missing team matches nobody, so maintainers get reset too.
 #
 # Everything runs through the GitHub API only; no code is checked out.
+#
+# Other repositories run this same file through workflow_call, from a caller
+# triggered by `issues: [opened, assigned, milestoned]`. The caller job needs
+# `issues: write` and must pass the praxis-bot secrets. When this runs here on
+# issues the inputs context is empty, so each input's default is repeated
+# where the input is read.
 #
 # The praxis-bot GitHub App token needs these permissions for this to work:
 #   - Repository "Issues": read & write   (label, unassign, milestone, comment)
@@ -35,9 +46,40 @@ name: Issue Triage
 on:
   issues:
     types: [opened, assigned, milestoned]
+  workflow_call:
+    inputs:
+      maintainer-teams:
+        description: >-
+          Comma-separated org team slugs whose members may triage, and assign
+          urgent/high or un-triaged work. Every slug must be a real team.
+        type: string
+        default: project-leadership,core-maintainers
+      priority-field-name:
+        description: Native issue field that holds priority
+        type: string
+        default: Priority
+      blocked-priorities:
+        description: >-
+          Comma-separated priority values only maintainers may assign,
+          matched case-insensitively
+        type: string
+        default: Urgent,High
+      policy-doc:
+        description: Repository path (and anchor) of the self-assignment policy comments link to
+        type: string
+        default: docs/development.md#picking-up-work
+    secrets:
+      PRAXIS_BOT_APP_ID:
+        description: praxis-bot app ID
+        required: true
+      PRAXIS_BOT_APP_PRIVATE_KEY:
+        description: praxis-bot app private key
+        required: true
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  # The suffix keeps this group distinct from a caller's own
+  # `${{ github.workflow }}-<number>` group, which would otherwise deadlock.
+  group: ${{ github.workflow }}-issue-triage-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 permissions: {}
@@ -63,7 +105,9 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Flag new issues for triage
-        if: github.event.action == 'opened' && !github.event.issue.milestone
+        if: >-
+          github.event.action == 'opened' && !github.event.issue.milestone
+          && !contains(github.event.issue.labels.*.name, 'triage/accepted')
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
@@ -84,12 +128,13 @@ jobs:
           ACTOR: ${{ github.event.sender.login }}
           # Teams whose members may triage and assign urgent/high or un-triaged
           # work. Comma-separated slugs.
-          MAINTAINER_TEAMS: "project-leadership,core-maintainers"
+          MAINTAINER_TEAMS: ${{ inputs.maintainer-teams || 'project-leadership,core-maintainers' }}
           # Native issue field that holds priority, and the option values that
           # only maintainers may hand out. Matched case-insensitively; add any
           # other top-tier names your org uses (e.g. Critical, P0).
-          PRIORITY_FIELD_NAME: "Priority"
-          BLOCKED_PRIORITIES: "Urgent,High"
+          PRIORITY_FIELD_NAME: ${{ inputs.priority-field-name || 'Priority' }}
+          BLOCKED_PRIORITIES: ${{ inputs.blocked-priorities || 'Urgent,High' }}
+          POLICY_DOC: ${{ inputs.policy-doc || 'docs/development.md#picking-up-work' }}
         run: |
           set -euo pipefail
 
@@ -106,6 +151,11 @@ jobs:
               --jq '.state' 2>/dev/null || true)"
             if [ "$state" = "active" ]; then
               echo "::notice::${ACTOR} is on maintainer team '${slug}': allowed"
+              if [ "$GH_EVENT_ACTION" = "milestoned" ]; then
+                gh issue edit "$ISSUE" --repo "$GH_REPO" \
+                  --remove-label "triage/needs-triage" \
+                  --add-label "triage/accepted"
+              fi
               exit 0
             fi
           done
@@ -158,7 +208,7 @@ jobs:
             gh issue edit "$ISSUE" --repo "$GH_REPO" --remove-label "triage/accepted" || true
 
             comment_once "<!-- conventions:issue-triage:reset -->" \
-          "Sorry @${ACTOR}, this issue hasn't been triaged yet, so I've reset it: I removed any assignees, its milestone, and any project boards. Only a maintainer can triage an issue (give it a milestone and add it to a project board), and it must be triaged before it can be assigned or prioritized. Once triaged, contributors can self-assign non-urgent work. See the [self-assignment policy](docs/development.md#picking-up-work)."
+          "Sorry @${ACTOR}, this issue hasn't been triaged yet, so I've reset it: I removed any assignees, its milestone, and any project boards. Only a maintainer can triage an issue (give it a milestone and add it to a project board), and it must be triaged before it can be assigned or prioritized. Once triaged, contributors can self-assign non-urgent work. See the [self-assignment policy](${POLICY_DOC})."
           }
 
           # --------------------------------------------------------------------
@@ -217,7 +267,7 @@ jobs:
                 echo "::warning::${ISSUE} is ${priority} priority: reverting self-assignment by ${ACTOR}"
                 gh issue edit "$ISSUE" --repo "$GH_REPO" --remove-assignee "$ASSIGNEE" || true
                 comment_once "<!-- conventions:issue-triage:priority -->" \
-          "Sorry @${ASSIGNEE}, this issue is marked **${priority}** priority. Urgent and high-priority work is assigned by a maintainer after triage, so I've unassigned it. Please ask a maintainer to assign it, or pick up a triaged \`medium\`/\`low\` priority issue instead. See the [self-assignment policy](docs/development.md#picking-up-work)."
+          "Sorry @${ASSIGNEE}, this issue is marked **${priority}** priority. Urgent and high-priority work is assigned by a maintainer after triage, so I've unassigned it. Please ask a maintainer to assign it, or pick up a triaged \`medium\`/\`low\` priority issue instead. See the [self-assignment policy](${POLICY_DOC})."
                 exit 0
               fi
             done

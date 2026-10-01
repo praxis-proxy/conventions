@@ -157,6 +157,11 @@ listed in `MAINTAINER_TEAMS` in
 `.github/workflows/issue-triage.yaml`: the same teams
 that bypass the PR size and description checks.
 
+New issues are labeled `triage/needs-triage`. When a
+maintainer gives an issue a milestone, the label is
+swapped for `triage/accepted`, which then stays even if
+the milestone is later removed.
+
 Adding a milestone or a project board does not, on its
 own, triage an issue: only a maintainer can, and only by
 doing both.

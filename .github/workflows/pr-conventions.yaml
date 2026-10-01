@@ -13,14 +13,65 @@ name: PR Conventions
 # whenever the app credentials aren't available and the checks run as normal.
 # PR comments are best-effort for the same reason: when one can't be posted,
 # the failing check still says what to fix in its error and job summary.
+#
+# Other repositories run this same file through workflow_call, from a caller
+# triggered by pull_request or pull_request_target. The caller job needs
+# `contents: read` and `pull-requests: write`, and should pass the praxis-bot
+# secrets explicitly. When this runs here on pull_request the inputs context
+# is empty, so each input's default is repeated where the input is read.
 
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_call:
+    inputs:
+      max-additions:
+        description: Most non-test lines a PR may add before the size check fails
+        type: number
+        default: 750
+      bypass-teams:
+        description: >-
+          Comma-separated org team slugs whose members skip the size and
+          description checks. Every slug must be a real team in the org.
+        type: string
+        default: project-leadership,core-maintainers
+      conventions-doc:
+        description: Repository path of the conventions document PR comments link to
+        type: string
+        default: docs/conventions.md
+      commit-subject-pattern:
+        description: Regex (jq syntax) every commit subject must match
+        type: string
+        default: '^(build|chore|ci|docs|feat|fix|perf|refactor|test)(\([a-z0-9-]+\))?!?: .+'
+      commit-subject-max-length:
+        description: Longest allowed commit subject, in characters (0 turns the limit off)
+        type: number
+        default: 72
+      dco-check:
+        description: >-
+          Require a Signed-off-by trailer on every commit. Turn this off when
+          the DCO GitHub App already enforces it.
+        type: boolean
+        default: true
+      dep-version-check:
+        description: >-
+          Require MAJOR.MINOR.PATCH versions in the root Cargo.toml's
+          [workspace.dependencies]. Skipped when there is no root Cargo.toml.
+        type: boolean
+        default: true
+    secrets:
+      PRAXIS_BOT_APP_ID:
+        description: praxis-bot app ID, for the maintainer bypass lookup
+        required: false
+      PRAXIS_BOT_APP_PRIVATE_KEY:
+        description: praxis-bot app private key, for the maintainer bypass lookup
+        required: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  # The suffix keeps this group distinct from a caller's own
+  # `${{ github.workflow }}-<number>` group, which would otherwise deadlock.
+  group: ${{ github.workflow }}-pr-conventions-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions: {}
@@ -56,7 +107,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ github.repository_owner }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          BYPASS_TEAMS: "project-leadership,core-maintainers"
+          BYPASS_TEAMS: ${{ inputs.bypass-teams || 'project-leadership,core-maintainers' }}
         run: |
           set -euo pipefail
           bypass=false
@@ -81,11 +132,11 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          MAX_ADDITIONS: "750"
+          MAX_ADDITIONS: ${{ inputs.max-additions || 750 }}
         run: |
           labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/pr-conventions$'; then
-            echo "skip/pr-conventions label present — skipping size check"
+            echo "skip/pr-conventions label present, skipping size check"
             exit 0
           fi
 
@@ -400,7 +451,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ github.repository_owner }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          BYPASS_TEAMS: "project-leadership,core-maintainers"
+          BYPASS_TEAMS: ${{ inputs.bypass-teams || 'project-leadership,core-maintainers' }}
         run: |
           set -euo pipefail
           bypass=false
@@ -424,10 +475,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          CONVENTIONS_DOC: ${{ inputs.conventions-doc || 'docs/conventions.md' }}
         run: |
           labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/pr-conventions$'; then
-            echo "skip/pr-conventions label present — skipping description check"
+            echo "skip/pr-conventions label present, skipping description check"
             exit 0
           fi
 
@@ -439,10 +491,91 @@ jobs:
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          Please add a description to this PR explaining what it does and why. See our [coding conventions](docs/conventions.md)." \
+          Please add a description to this PR explaining what it does and why. See our [coding conventions](${CONVENTIONS_DOC})." \
                 || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
             echo "::error::PR has no description"
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
+  # Dependency Version Check
+  # ----------------------------------------------------------------------------
+  #
+  # Every [workspace.dependencies] version must be MAJOR.MINOR.PATCH, so
+  # semver-checks and audits see the exact version the workspace was built
+  # against. A `semver:ignore` comment on the line, or on the line above,
+  # exempts one dependency.
+
+  dep-version-check:
+    if: ${{ !github.event.pull_request.draft && toJSON(inputs.dep-version-check) != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check workspace dependency versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ! content=$(gh api "repos/${{ github.repository }}/contents/Cargo.toml?ref=${HEAD_SHA}" \
+              --jq '.content' 2>&1); then
+            if [[ "$content" == *"HTTP 404"* ]]; then
+              echo "No root Cargo.toml, nothing to check"
+              exit 0
+            fi
+            echo "::error::could not fetch Cargo.toml: ${content}"
+            exit 1
+          fi
+          echo "$content" | base64 -d > "$RUNNER_TEMP/cargo.toml"
+
+          in_ws=false
+          bad=0
+          skip_next=false
+          while IFS= read -r line; do
+            if [[ "$line" == "[workspace.dependencies]" ]]; then
+              in_ws=true
+              skip_next=false
+              continue
+            elif [[ "$line" == "["* ]]; then
+              in_ws=false
+              skip_next=false
+              continue
+            fi
+
+            $in_ws || continue
+            [[ -z "$line" ]] && continue
+
+            if [[ "$line" == "#"* ]]; then
+              [[ "$line" == *"semver:ignore"* ]] && skip_next=true
+              continue
+            fi
+
+            if $skip_next || [[ "$line" == *"semver:ignore"* ]]; then
+              skip_next=false
+              continue
+            fi
+            skip_next=false
+
+            ver=""
+            if [[ "$line" =~ ^[a-zA-Z][a-zA-Z0-9_-]*[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+              ver="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ version[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+              ver="${BASH_REMATCH[1]}"
+            fi
+
+            if [[ -n "$ver" ]]; then
+              dots="${ver//[^.]/}"
+              if [[ ${#dots} -ne 2 ]]; then
+                crate="${line%%[[:space:]]*=*}"
+                echo "::error::${crate} = \"${ver}\" is not three-component semver (expected MAJOR.MINOR.PATCH)"
+                bad=1
+              fi
+            fi
+          done < "$RUNNER_TEMP/cargo.toml"
+
+          if [[ "$bad" -eq 1 ]]; then
             exit 1
           fi
 
@@ -461,28 +594,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          SUBJECT_PATTERN: >-
+            ${{ inputs.commit-subject-pattern || '^(build|chore|ci|docs|feat|fix|perf|refactor|test)(\([a-z0-9-]+\))?!?: .+' }}
+          MAX_LENGTH_INPUT: ${{ inputs.commit-subject-max-length }}
         run: |
+          # An explicit 0 turns the length limit off, so default in shell
+          # rather than with || in the expression above.
+          max_length="${MAX_LENGTH_INPUT:-72}"
+
           labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/pr-conventions$'; then
-            echo "skip/pr-conventions label present — skipping commit message check"
+            echo "skip/pr-conventions label present, skipping commit message check"
             exit 0
           fi
 
-          # shellcheck disable=SC2016  # $subject is a jq variable, not shell
-          bad=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" \
-            --paginate --jq '[.[] | select(.parents | length == 1) |
-              (.commit.message | split("\n")[0]) as $subject |
-              select(($subject | test("^(build|chore|ci|docs|feat|fix|perf|refactor|test)(\\([a-z0-9-]+\\))?!?: .+") | not) or ($subject | length > 72)) |
-              "- `\(.sha[:7])`: `\($subject)`"] | join("\n")')
+          # shellcheck disable=SC2016  # $subject, $re and $max are jq variables, not shell
+          bad=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" --paginate \
+            | jq -rs --arg re "$SUBJECT_PATTERN" --argjson max "$max_length" \
+              'add | [.[] | select(.parents | length == 1) |
+                (.commit.message | split("\n")[0]) as $subject |
+                select(($subject | test($re) | not) or ($max > 0 and ($subject | length) > $max)) |
+                "- `\(.sha[:7])`: `\($subject)`"] | join("\n")')
 
           if [ -n "$bad" ]; then
+            limit=""
+            if [ "$max_length" -gt 0 ]; then
+              limit=", at most ${max_length} chars"
+            fi
             marker="<!-- conventions:commit-message-check -->"
             already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
               --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          **Non-conforming commit subjects** (expected \`type(scope): summary\`, ≤72 chars, types: build/chore/ci/docs/feat/fix/perf/refactor/test):
+          **Non-conforming commit subjects** (expected \`type(scope): summary\`${limit}, matching \`${SUBJECT_PATTERN}\`):
 
           ${bad}
 
@@ -499,7 +644,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   dco-check:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && toJSON(inputs.dco-check) != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -509,10 +654,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          CONVENTIONS_DOC: ${{ inputs.conventions-doc || 'docs/conventions.md' }}
         run: |
           labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/pr-conventions$'; then
-            echo "skip/pr-conventions label present — skipping DCO check"
+            echo "skip/pr-conventions label present, skipping DCO check"
             exit 0
           fi
 
@@ -526,7 +672,7 @@ jobs:
             if [ "$already" -eq 0 ]; then
               gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
                 --body "${marker}
-          **Missing \`Signed-off-by\` trailer**: ${missing}. Sign-off asserts you reviewed and understand your changes (see [conventions](docs/conventions.md#code-responsibility)). Amend with \`git commit --amend -s\`." \
+          **Missing \`Signed-off-by\` trailer**: ${missing}. Sign-off asserts you reviewed and understand your changes (see [conventions](${CONVENTIONS_DOC}#code-responsibility)). Amend with \`git commit --amend -s\`." \
                 || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
             fi
             echo "::error::Commits missing Signed-off-by: ${missing}"
@@ -551,7 +697,7 @@ jobs:
         run: |
           labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/commit-signing$'; then
-            echo "skip/commit-signing label present — skipping signing check"
+            echo "skip/commit-signing label present, skipping signing check"
             exit 0
           fi
 
@@ -590,7 +736,7 @@ jobs:
         run: |
           labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/pr-conventions$'; then
-            echo "skip/pr-conventions label present — skipping authorship check"
+            echo "skip/pr-conventions label present, skipping authorship check"
             exit 0
           fi
 

@@ -3,6 +3,11 @@ name: Publish Dry Run
 # ------------------------------------------------------------------------------
 # Workflow Settings
 # ------------------------------------------------------------------------------
+#
+# Other repositories run this same file through workflow_call. The caller job
+# must grant at least the permissions the jobs below ask for. Actions are
+# pinned by SHA rather than referenced by local path, because a called
+# workflow resolves local paths against the caller's checkout.
 
 on:
   push:
@@ -10,9 +15,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      make-args:
+        description: Extra arguments for `make publish-dry-run` (e.g. PUBLISH_DRY_RUN_FLAGS=--no-verify)
+        type: string
+        default: ""
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-publish-dry-run-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions: {}
@@ -46,10 +57,15 @@ jobs:
 
       - name: Set up Rust
         if: steps.ws.outputs.empty == 'false'
-        uses: ./.github/actions/setup-rust
+        uses: praxis-proxy/conventions/.github/actions/setup-rust@747ec184a0e565c1948bb77ea58487839b78db55 # v0.2.0-9-g747ec18
         with:
           cache-suffix: publish
 
       - name: Publish dry run
         if: steps.ws.outputs.empty == 'false'
-        run: make publish-dry-run
+        env:
+          MAKE_ARGS: ${{ inputs.make-args }}
+        run: |
+          # MAKE_ARGS is split on purpose, so several VAR=value pairs can pass.
+          # shellcheck disable=SC2086
+          make publish-dry-run $MAKE_ARGS
