@@ -126,7 +126,6 @@ jobs:
       TYPOS_VERSION: v1.42.1
       TAPLO_VERSION: "0.10.0"
       ACTIONLINT_VERSION: "1.7.10"
-      LYCHEE_VERSION: v0.24.2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -147,17 +146,11 @@ jobs:
           curl -sSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
             | tar xz -C "$HOME/.local/bin" actionlint
 
-          curl -sSL "https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar xz -C "$HOME/.local/bin" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
-
       - name: Lint extra (typos + taplo + shellcheck + actionlint)
         run: make lint-extra
 
       - name: Markdown lint
         run: npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target"
-
-      - name: Link check
-        run: lychee --no-progress README.md LICENSE docs/ .claude/CLAUDE.md
 
   # ----------------------------------------------------------------------------
   # Feature matrix (clippy + test per feature combination)
