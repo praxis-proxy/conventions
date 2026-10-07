@@ -1,8 +1,8 @@
 # Contributing
 
 Thank you for your interest in contributing! Start by
-reading the [development conventions] — submissions that
-do not follow them will be rejected.
+reading the [development conventions]. Submissions that
+do not follow the conventions will be rejected.
 
 [development conventions]: docs/conventions.md
 
@@ -41,18 +41,13 @@ go through the [proposal process].
 
 CI enforces reviewability on every PR:
 
-- At most 750 added lines of production code
-  (tests, docs, examples excluded)
-- A real description of what and why
-- `Signed-off-by` trailer on every commit
-  (`git commit -s`)
+- A maximum added lines count of production code (tests, docs, examples excluded)
+- A real description of what and why - `Signed-off-by`
+  trailer on every commit (`git commit -s`)
 - Cryptographically signed commits (GPG or SSH)
-- Human authorship: commits authored or signed-off by
-  AI tools are rejected
-- Conventional commit subjects
-  (`type(scope): summary`, ≤72 chars)
+- Human authorship: commits authored or signed-off by tools are rejected
+- Conventional commit subjects (`type(scope): summary`, ≤72 chars)
 
-See the [PR conventions] section for details and
-override labels.
+See the [PR conventions] section for details and override labels.
 
 [PR conventions]: docs/conventions.md#pull-request-conventions
