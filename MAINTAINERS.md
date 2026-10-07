@@ -10,7 +10,7 @@ definitions and processes.
 | --------- | ----------- | ----------- |
 | Shane Utt | [@shaneutt] | Red Hat     |
 
-> **Note**: Project leads are effective maintainers for _all_ repos.
+> **Note**: Project leads are effective maintainers for *all* repos.
 
 [@shaneutt]: https://github.com/shaneutt
 
@@ -61,18 +61,12 @@ definitions and processes.
 [@asaadbalum]: https://github.com/asaadbalum
 [@aslakknutsen]: https://github.com/aslakknutsen
 [@nerdalert]: https://github.com/nerdalert
-[@cnuland]: https://github.com/cnuland
 [@christinaexyou]: https://github.com/christinaexyou
 [@maleck13]: https://github.com/maleck13
 [@dgn]: https://github.com/dgn
 [@david-martin]: https://github.com/david-martin
 [@didierofrivia]: https://github.com/didierofrivia
 [@rhdedgar]: https://github.com/rhdedgar
-[@esnible]: https://github.com/esnible
-[@evacchi]: https://github.com/evacchi
-[@eoinfennessy]: https://github.com/eoinfennessy
-[@elevran]: https://github.com/elevran
-[@franciscojavierarceo]: https://github.com/franciscojavierarceo
 [@guicassolato]: https://github.com/guicassolato
 [@henschwartz]: https://github.com/henschwartz
 [@jland-redhat]: https://github.com/jland-redhat
@@ -80,15 +74,12 @@ definitions and processes.
 [@Ladas]: https://github.com/Ladas
 [@liavweiss]: https://github.com/liavweiss
 [@mkoushni]: https://github.com/mkoushni
-[@noyitz]: https://github.com/noyitz
 [@pierDipi]: https://github.com/pierDipi
 [@rikatz]: https://github.com/rikatz
 [@szedan-rh]: https://github.com/szedan-rh
 [@terylt]: https://github.com/terylt
 [@twghu]: https://github.com/twghu
-[@valeriiashapoval]: https://github.com/valeriiashapoval
 [@yehuditkerido]: https://github.com/yehuditkerido
-[@yossiovadia]: https://github.com/yossiovadia
 
 ## Emeritus
 
