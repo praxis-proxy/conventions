@@ -646,3 +646,9 @@ its code. The gates:
   frontmatter and lifecycle rules in the centralized
   [enhancements](https://github.com/praxis-proxy/enhancements/blob/main/docs/process.md)
   repository.
+
+A PR with a user-visible change also adds an entry to
+`CHANGELOG.md` under `[Unreleased]`, in the same PR. CI
+does not check this; reviewers do. See
+[Changelog](release.md#changelog) for the format and
+the release-time roll.
