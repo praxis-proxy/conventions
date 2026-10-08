@@ -16,3 +16,4 @@
 - [ ] `make all` passes locally
 - [ ] New capabilities have unit and integration tests
 - [ ] Commits are signed and signed-off (`git commit -s`)
+- [ ] `CHANGELOG.md` has an entry for user-visible changes

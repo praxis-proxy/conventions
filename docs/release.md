@@ -25,7 +25,8 @@ Before tagging a release:
   `--allow-dirty` when running against uncommitted
   changes)
 - [ ] `SECURITY.md` lists the new minor version
-- [ ] GitHub Release changelog is drafted (see below)
+- [ ] The `[Unreleased]` section of `CHANGELOG.md` is
+  rolled into the new version (see [Changelog](#changelog))
 
 ## Tagging a Release
 
@@ -79,12 +80,47 @@ against a semver git tag.
 
 ## Changelog
 
-Changelogs live in [GitHub Releases][gh-releases]. The
-release pipeline creates the release with GitHub's
-generated notes; edit afterwards for clarity. There is
-no separate CHANGELOG file.
+Each repository keeps a `CHANGELOG.md` at its root,
+edited by hand, in the
+[Keep a Changelog 1.0.0][keepachangelog] format. A
+`## [Unreleased]` section sits at the top, and each
+version's entries are grouped under these `###`
+headings:
 
-[gh-releases]: https://docs.github.com/en/repositories/releasing-projects-on-github
+- `Added`: new features
+- `Changed`: changes to existing behavior
+- `Deprecated`: features that will be removed later
+- `Removed`: features that are now gone
+- `Fixed`: bug fixes
+- `Security`: vulnerability fixes
+
+A PR with a user-visible change adds its entry under
+`[Unreleased]` in that same PR. Write entries for the
+people who run or depend on the project, not as a copy
+of the commit subject.
+
+At release time, right before tagging, roll the
+`[Unreleased]` section into a versioned heading
+(`## [X.Y.Z] - YYYY-MM-DD`) and start a fresh, empty
+`[Unreleased]` above it. Update the compare links at the
+bottom of the file too: `[Unreleased]` now compares the
+new tag to `HEAD`, and the new version compares the
+previous tag to the new one. The roll covers everything
+merged since the previous tag, including anything that
+landed after the version bump.
+
+The GitHub release's notes carry that version's section.
+Before publishing the release, paste the section in
+place of GitHub's generated "What's Changed" list; the
+"New Contributors" and "Full Changelog" lines can stay.
+The `skip/changelog` label (`.github/release.yml`) only
+affects GitHub's generated notes, never `CHANGELOG.md`.
+
+A repository that adopts the file partway through its
+history says near the top of `CHANGELOG.md` that notes
+for earlier releases are on its GitHub Releases page.
+
+[keepachangelog]: https://keepachangelog.com/en/1.0.0/
 
 ## Release Branches
 
