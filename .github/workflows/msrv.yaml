@@ -63,7 +63,7 @@ jobs:
 
       - name: Set up Rust (MSRV)
         if: steps.ws.outputs.empty == 'false'
-        uses: praxis-proxy/conventions/.github/actions/setup-rust@747ec184a0e565c1948bb77ea58487839b78db55 # v0.2.0-9-g747ec18
+        uses: praxis-proxy/conventions/.github/actions/setup-rust@b1d3ce12ea9a4d12b1e62e3af5ad76c89000a072 # v0.2.0-9-g747ec18
         with:
           rust-version: ${{ steps.msrv.outputs.version }}
           cache-suffix: msrv
