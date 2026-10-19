@@ -1,4 +1,6 @@
 # Praxis Conventions
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpraxis-proxy%2Fconventions.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpraxis-proxy%2Fconventions?ref=badge_shield)
+
 
 A template repository for scaffolding Rust projects with
 strict, machine-enforced quality standards: opinionated
@@ -30,6 +32,9 @@ a project.
   triaged yet is unassigned
 - **Everything else**: markdown, TOML, shell, spelling,
   and workflow files are linted too
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpraxis-proxy%2Fconventions.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpraxis-proxy%2Fconventions?ref=badge_large)
 
 ## Quickstart
 
