@@ -57,7 +57,7 @@ jobs:
 
       - name: Set up Rust
         if: steps.ws.outputs.skip == 'false'
-        uses: praxis-proxy/conventions/.github/actions/setup-rust@b1d3ce12ea9a4d12b1e62e3af5ad76c89000a072 # v0.2.0-9-g747ec18
+        uses: praxis-proxy/conventions/.github/actions/setup-rust@2b6bf27b160c9eba7912cbb494aeb7669f2a69e3 # v0.2.0-9-g747ec18
         with:
           cache-suffix: semver
 
