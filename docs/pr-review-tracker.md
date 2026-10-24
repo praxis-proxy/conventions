@@ -19,12 +19,24 @@ Two things are produced:
 | Path | Role |
 | --- | --- |
 | `.github/actions/review-tracker/` | Composite action and its Python implementation |
-| `.github/workflows/pr-review-tracker.yaml` | Dispatch-only workflow, this repository only |
+| `.github/workflows/pr-review-tracker.yaml` | Reusable workflow wrapping the action |
 
-The workflow runs against this repository alone for now and reaches
-the action by local path. Sharing it with `praxis`, `ai`, and `policy`
-is a follow-up; see
-[Sharing With Other Repositories](#sharing-with-other-repositories).
+The workflow reaches the action with GitHub's [self-repository
+syntax][self-repo], `uses: $/.github/actions/review-tracker`. That
+resolves to *this* repository at the exact commit that is running, so
+when `praxis` calls the workflow pinned at some SHA, the action comes
+from this repository at that same SHA.
+
+This matters because the workspace-relative `./` form would resolve
+against the **caller's** checkout, where the action does not exist,
+and a hardcoded absolute pin would have to be kept in step by hand
+and would go stale on every release. `$/` needs neither, and no
+`actions/checkout` step.
+
+It requires an Actions runner of 2.336.0 or newer, which the
+GitHub-hosted `ubuntu-24.04` image satisfies.
+
+[self-repo]: https://github.blog/changelog/2026-07-30-reference-same-repository-actions-with-self-repository-syntax/
 
 ## What Counts As A Response
 
@@ -296,35 +308,11 @@ Suggested order:
 3. Enable `apply-reminders`.
 4. Only then add a schedule.
 
-## Sharing With Other Repositories
+## Per-Repository Caller
 
-Not wired up yet, deliberately. A workflow that other repositories
-call cannot reach the action by local path, because a called workflow
-resolves local paths against the **caller's** checkout, where the
-action does not exist. It has to use an absolute, SHA-pinned
-reference:
-
-```yaml
-uses: praxis-proxy/conventions/.github/actions/review-tracker@<sha>
-```
-
-That `<sha>` must be a commit on this repository's default branch.
-Since this repository squash-merges, a pre-merge branch commit is not
-reachable from `main` afterwards, so a pin written in the same pull
-request that introduces the action would rot. The same reasoning is
-already recorded at the top of `coverage.yaml`, and it is why the
-`praxis` callers pin `2b6bf27`, a commit that is on `main`.
-
-So the order is:
-
-1. Merge this. Validate it here by dispatching against this
-   repository's own pull requests.
-2. Follow up by adding a `workflow_call` trigger to
-   `pr-review-tracker.yaml`, switching the action reference to the
-   absolute pinned form above, and adding a caller to `praxis`, `ai`,
-   and `policy`.
-
-The caller is then the usual thin wrapper:
+Each repository adds its own caller, pinned to a released tag of this
+repository. The caller pins once; the action reference inside the
+workflow follows that pin automatically.
 
 ```yaml
 name: PR Review Tracker
@@ -395,9 +383,8 @@ cannot be run at all: it does not appear in the Actions UI, and
 'workflow_dispatch' trigger". Once the file is on the default branch,
 a dispatch can select any branch as its ref.
 
-The same will apply to the per-repository callers added in the
-follow-up: each must reach its own default branch before it can be
-dispatched.
+The same applies to each repository's caller: it must reach that
+repository's own default branch before it can be dispatched.
 
 So this cannot be exercised end-to-end until it merges. What is
 available before then:
