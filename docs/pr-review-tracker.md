@@ -208,6 +208,20 @@ cannot post a comment as a bot account, so a marker pasted by hand is
 ignored rather than trusted as proof a reminder was sent, in either
 direction: it can neither suppress a real reminder nor fake one.
 
+Both halves of that check matter here, because two different
+identities share a similar name:
+
+| Login | Type | What it is |
+| --- | --- | --- |
+| `praxis-bot-app[bot]` | `Bot` | The GitHub App. Posts the reminders. |
+| `praxis-bot` | `User` | A separate machine account that submits reviews. |
+
+Only the first is trusted. The login is never hardcoded: the workflow
+derives it from the token step's `app-slug` output, so it is always
+whichever app actually authenticated. Hardcoding `praxis-bot[bot]`
+would be wrong on both counts, since the app's slug is
+`praxis-bot-app`.
+
 ### Repeat And Concurrent Runs
 
 Three layers:
@@ -270,10 +284,11 @@ a run that silently cannot write.
 
 ### Installation Access
 
-There is one installation of praxis-bot on the `praxis-proxy`
-organization, with access to a selected list of repositories. Each
-repository that runs this workflow must be in that list, and the
-installation must hold the organization Projects permission above.
+There is one installation of the `praxis-bot-app` GitHub App
+(app ID 4068652) on the `praxis-proxy` organization, and its
+repository selection is **all repositories**. That covers `praxis`,
+`ai`, `policy`, and this repository, so no installation change is
+needed to roll this out.
 
 The token is minted with the default repository scope, so it reaches
 only the repository the workflow runs in. Organization-level
@@ -400,7 +415,7 @@ available before then:
   GH_TOKEN=$(gh auth token) python3 -m review_tracker \
     --repository praxis-proxy/praxis \
     --organization praxis-proxy \
-    --bot-login praxis-bot[bot]
+    --bot-login 'praxis-bot-app[bot]'
   ```
 
   This reads only. The token needs `read:project` in addition to the
