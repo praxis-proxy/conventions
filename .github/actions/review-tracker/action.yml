@@ -1,0 +1,66 @@
+name: Review Tracker
+description: Track initial PR review responses and remind overdue assignees
+
+# ------------------------------------------------------------------------------
+# Action Settings
+# ------------------------------------------------------------------------------
+#
+# Scans one repository's open, ready pull requests, updates two fields on an
+# organization project, and reminds assignees who still owe an initial review.
+# Everything goes through the GitHub API; no pull request code is checked out
+# or executed, and every input reaches the script as an environment variable
+# rather than through shell interpolation.
+#
+# Writes are gated twice: `dry-run` must be false AND the matching opt-in must
+# be true. A dry run reads only and still writes the full job summary.
+
+inputs:
+  github-token:
+    description: praxis-bot installation token
+    required: true
+  bot-login:
+    description: >-
+      Login of the bot account whose comments are trusted as reminder state,
+      normally `<app-slug>[bot]`. Comments from anyone else are ignored.
+    required: true
+  repository:
+    description: owner/name of the repository to scan
+    required: false
+    default: ${{ github.repository }}
+  organization:
+    description: Organization that owns the project board
+    required: false
+    default: ${{ github.repository_owner }}
+  project-number:
+    description: Number of the organization project to update
+    required: false
+    default: "13"
+  dry-run:
+    description: Report proposed changes without writing anything
+    required: false
+    default: "true"
+  apply-project:
+    description: Opt in to writing the two project fields; needs dry-run false
+    required: false
+    default: "false"
+  apply-reminders:
+    description: Opt in to posting reminder comments; needs dry-run false
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Track review responses
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        APPLY_PROJECT: ${{ inputs.apply-project }}
+        APPLY_REMINDERS: ${{ inputs.apply-reminders }}
+        BOT_LOGIN: ${{ inputs.bot-login }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        ORGANIZATION: ${{ inputs.organization }}
+        PROJECT_NUMBER: ${{ inputs.project-number }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: python3 -m review_tracker

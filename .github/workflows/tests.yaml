@@ -110,6 +110,27 @@ jobs:
         run: make test
 
   # ----------------------------------------------------------------------------
+  # Workflow action tests (Python)
+  # ----------------------------------------------------------------------------
+  #
+  # Always runs, even with an empty workspace: these cover the Python shipped
+  # in .github/actions, which is independent of the Rust workspace. The suite
+  # is standard library only, so the runner's preinstalled python3 is enough.
+
+  scripts-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test workflow actions
+        run: make test-scripts V=1
+
+  # ----------------------------------------------------------------------------
   # Meta-lint (markdown, TOML, shell, workflows, spelling)
   # ----------------------------------------------------------------------------
   #

@@ -16,6 +16,7 @@ LINT_EXTRA_CMDS  := typos taplo shellcheck actionlint
 AUDIT_CMDS       := cargo-audit cargo-deny
 KIND_CLUSTER_NAME ?= praxis-dev
 PROJECT_IMAGE    ?= project:dev
+TRACKER_DIR      := .github/actions/review-tracker
 KUBECTL          ?= kubectl --context kind-$(KIND_CLUSTER_NAME)
 
 ifneq ($(V),)
@@ -23,7 +24,7 @@ ifneq ($(V),)
 endif
 
 .PHONY: all build release check clean \
-	test mutants lint lint-extra fmt doc audit semver publish-dry-run publish \
+	test test-scripts mutants lint lint-extra fmt doc audit semver publish-dry-run publish \
 	coverage coverage-check \
 	check-prereqs check-prereqs-extra check-prereqs-audit check-prereqs-nightly \
 	require-container-engine \
@@ -36,7 +37,7 @@ endif
 # All
 # -------------------------------------------------------------------
 
-all: build fmt lint lint-extra test audit
+all: build fmt lint lint-extra test test-scripts audit
 
 # -------------------------------------------------------------------
 # Build
@@ -60,6 +61,12 @@ clean:
 
 test:
 	cargo test --workspace $(_NOCAPTURE)
+
+# Unit tests for the Python workflow actions under .github/actions. These use
+# only the standard library, so they need no virtualenv or extra tooling.
+test-scripts:
+	python3 -m unittest discover $(if $(V),-v,) \
+		-t $(TRACKER_DIR) -s $(TRACKER_DIR)/review_tracker/tests
 
 mutants:
 	cargo mutants --workspace
@@ -225,7 +232,7 @@ help:
 	@echo "  PROJECT_IMAGE      container image tag"
 	@echo ""
 	@echo "Top-level:"
-	@echo "  all              build + lint + lint-extra + test + audit"
+	@echo "  all              build + lint + lint-extra + test + test-scripts + audit"
 	@echo ""
 	@echo "Build:"
 	@echo "  build            cargo build --workspace"
@@ -235,6 +242,7 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  test             run all tests"
+	@echo "  test-scripts     run the workflow action unit tests"
 	@echo "  mutants          mutation testing (cargo-mutants)"
 	@echo ""
 	@echo "Quality:"

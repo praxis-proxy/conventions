@@ -24,3 +24,6 @@ coverage.json
 !.hooks/
 .claude/*
 !.claude/CLAUDE.md
+
+# Python bytecode from .github/actions scripts
+__pycache__/
