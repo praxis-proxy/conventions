@@ -40,8 +40,12 @@ GitHub-hosted `ubuntu-24.04` image satisfies.
 
 ## What Counts As A Response
 
-A response is a **submitted** review in one of three states:
-`APPROVED`, `CHANGES_REQUESTED`, or `COMMENTED`.
+A response is a **submitted** review in one of four states:
+`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, or `DISMISSED`.
+
+A review only counts with a usable `submitted_at`. That timestamp is
+the evidence it was submitted rather than merely started; a review in
+a counting state without one is reported, not assumed either way.
 
 Deliberately excluded:
 
@@ -49,15 +53,25 @@ Deliberately excluded:
   invisible to everyone but their author.
 - Ordinary pull request comments and review-thread replies.
 - Reviews from accounts GitHub reports as apps.
-- `DISMISSED` reviews. See [Limitations](#limitations).
 
 A review counts when it was submitted at or after the reviewer's
 current assignment began. A review given while the pull request was
 still a draft still counts: it is a real initial response.
 
+### Dismissal
+
+`DISMISSED` counts because dismissal is something done to a review
+afterwards; it does not un-submit it. Someone who approved and then
+had that approval dismissed *did* respond, and their initial-response
+timer stays stopped. Dismissal restarts neither the timer nor the
+reminder sequence.
+
+What happens after a dismissal is a further review round, which this
+version does not track. See [Limitations](#limitations).
+
 Once somebody responds, their timer stops permanently for that
 assignment. Nothing else stops it: not an unrelated comment, not a
-push by the author, not a label change.
+push by the author, not a label change, not a dismissal.
 
 ## When The Clock Starts
 
@@ -427,11 +441,12 @@ available before then:
 
 ## Limitations
 
-- **`DISMISSED` reviews do not count.** Only the three states listed
-  above do. If somebody approves and the approval is later dismissed,
-  GitHub rewrites that review's state, so their timer reopens and they
-  can be reminded again. Changing this means treating dismissal as a
-  response, which would hide a genuinely re-opened review request.
+- **Only the first response is tracked.** When a review is dismissed,
+  or an author pushes changes after a `CHANGES_REQUESTED`, the
+  reviewer is effectively owed a second look. This version says
+  nothing about that: the person is already discharged and will not
+  appear on the board or be reminded again for that assignment.
+  Tracking later review rounds is deliberately out of scope here.
 - **No holiday calendar.** A reminder can land during somebody's
   holiday or a public holiday in their country.
 - **Timeline retention.** If an `assigned` event cannot be found for a

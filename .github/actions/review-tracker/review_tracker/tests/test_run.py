@@ -118,6 +118,32 @@ class Clearing(unittest.TestCase):
             "a discharged pull request has both fields cleared",
         )
 
+    def test_clears_and_sends_nothing_after_a_dismissed_review(self):
+        api = standard(
+            reviews=[
+                {
+                    "state": "DISMISSED",
+                    "user": {"login": "ada"},
+                    "submitted_at": "2026-06-02T10:00:00Z",
+                }
+            ],
+            item_pages=[[item_node("i1", 1, REPO, awaiting="ada", oldest=1)]],
+        )
+
+        run(api, options(DRY_RUN="false", APPLY_PROJECT="true",
+                         APPLY_REMINDERS="true"), NOW)
+
+        self.assertEqual(
+            [name for name, _ in api.mutations],
+            ["clear", "clear"],
+            "a dismissed review still discharges the pull request",
+        )
+        self.assertEqual(
+            api.posted,
+            [],
+            "dismissal must not restart the reminder sequence",
+        )
+
     def test_reports_a_pull_request_with_no_project_item(self):
         report = run(standard(item_pages=[[]]), options(), NOW)
 

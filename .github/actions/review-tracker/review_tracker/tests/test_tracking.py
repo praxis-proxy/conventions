@@ -180,15 +180,56 @@ class Responses(unittest.TestCase):
             "an unsubmitted review is not a response",
         )
 
-    def test_a_dismissed_review_does_not_count(self):
+    def test_a_dismissed_review_still_counts(self):
         reviews = [review("ada", "DISMISSED", at(4))]
+
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+
+        self.assertEqual(
+            result.outstanding,
+            (),
+            "dismissal does not un-submit the initial response",
+        )
+
+    def test_a_dismissed_review_does_not_restart_the_timer(self):
+        timeline = [assigned("ada", at(1))]
+        reviews = [review("ada", "DISMISSED", at(4))]
+
+        before = track(pull(["ada"]), timeline, [review("ada", "APPROVED", at(4))])
+        after = track(pull(["ada"]), timeline, reviews)
+
+        self.assertEqual(
+            after.outstanding,
+            before.outstanding,
+            "dismissing an approval must leave the result unchanged",
+        )
+
+    def test_a_dismissed_review_needs_evidence_it_was_submitted(self):
+        reviews = [
+            {"state": "DISMISSED", "user": {"login": "ada"}, "submitted_at": None}
+        ]
 
         result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
 
         self.assertEqual(
             [item.login for item in result.outstanding],
             ["ada"],
-            "a dismissed review is not one of the three counted states",
+            "without a submitted_at there is no evidence of a response",
+        )
+        self.assertTrue(
+            any("submitted_at" in note for note in result.ambiguities),
+            f"the missing evidence must be reported, got {result.ambiguities}",
+        )
+
+    def test_a_dismissed_review_before_assignment_does_not_count(self):
+        reviews = [review("ada", "DISMISSED", at(1))]
+
+        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews)
+
+        self.assertEqual(
+            [item.login for item in result.outstanding],
+            ["ada"],
+            "a dismissed review predating the assignment is not a response to it",
         )
 
     def test_another_persons_review_does_not_count(self):

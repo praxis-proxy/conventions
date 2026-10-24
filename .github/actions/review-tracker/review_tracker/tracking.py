@@ -14,7 +14,13 @@ from .bizdays import calendar_days_elapsed, parse_timestamp
 ASSIGNMENT_EVENTS = ("assigned", "unassigned")
 BOT_SUFFIX = "[bot]"
 READY_EVENT = "ready_for_review"
-RESPONSE_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED"})
+
+# States that mean a review was actually submitted. DISMISSED belongs here:
+# dismissal is something done to a review afterwards, and it does not un-submit
+# it. PENDING is absent because an unsubmitted review is not a response.
+RESPONSE_STATES = frozenset(
+    {"APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"}
+)
 
 
 @dataclass(frozen=True)
@@ -66,6 +72,10 @@ def track(pull, timeline, reviews):
     draft-to-ready transition when that is later. A review submitted any time
     after their assignment stops their timer, including one given while the
     pull request was still a draft.
+
+    The timer stops for good. Dismissing that review afterwards does not
+    restart it, because the initial response did happen; what follows a
+    dismissal is a further review round, which this version does not track.
     """
     if pull.get("state") != "open" or pull.get("draft"):
         return Tracking((), ())
@@ -164,11 +174,17 @@ def _latest_ready(timeline, ambiguities):
 
 
 def _responses(reviews, ambiguities):
-    """Earliest qualifying submitted review per login.
+    """Earliest submitted review per login.
 
-    Only APPROVED, CHANGES_REQUESTED, and COMMENTED count. PENDING reviews are
-    excluded by state and carry no `submitted_at` anyway, and ordinary issue
-    comments are never read as reviews because they are not in this feed.
+    A review only counts with a usable `submitted_at`, which is the evidence
+    that it was submitted rather than merely started. A review in a counting
+    state without one is reported instead of assumed either way.
+
+    PENDING reviews are excluded by state and carry no `submitted_at` anyway,
+    and ordinary issue comments are never read as reviews because they are not
+    in this feed. Reviews are matched to assignees by login, and bot accounts
+    are already excluded from the assignee list, so a bot review can never
+    discharge a person.
     """
     earliest = {}
     for review in reviews:

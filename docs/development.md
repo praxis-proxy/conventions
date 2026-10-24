@@ -197,9 +197,10 @@ a review for three business days, once more three
 business days after that, and then stops.
 
 A submitted review of any kind (approve, request
-changes, or comment) stops your timer. Leaving an
-ordinary comment does not, and neither does starting a
-review you have not submitted.
+changes, or comment) stops your timer, and it stays
+stopped even if that review is later dismissed. Leaving
+an ordinary comment does not stop it, and neither does
+starting a review you have not submitted.
 
 See [pr-review-tracker.md] for the exact calculations,
 the permissions involved, and how to turn it on.
