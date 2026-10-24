@@ -87,7 +87,6 @@ pinned to a tagged commit of this repository:
 | `pr-conventions.yaml` | `max-additions`, `bypass-teams`, `conventions-doc`, `commit-subject-pattern`, `commit-subject-max-length`, `dco-check`, `dep-version-check` |
 | `pr-housekeeping.yaml` | `stale-draft-days`, `stale-days` |
 | `pr-assignees.yaml` | `maintainer-teams`, `reviewer-teams` |
-| `pr-review-tracker.yaml` | `dry-run`, `apply-project`, `apply-reminders`, `project-number` |
 | `issue-triage.yaml` | `policy-doc` |
 | `automated-review.yaml` | `pr_number`, `model`, `prompt-path`, `cloud-ml-region`, `gcp-project-id` |
 | `publish-dry-run.yaml` | `make-args` |

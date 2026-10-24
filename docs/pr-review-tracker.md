@@ -19,12 +19,12 @@ Two things are produced:
 | Path | Role |
 | --- | --- |
 | `.github/actions/review-tracker/` | Composite action and its Python implementation |
-| `.github/workflows/pr-review-tracker.yaml` | Reusable workflow wrapping the action |
+| `.github/workflows/pr-review-tracker.yaml` | Dispatch-only workflow, this repository only |
 
-The action is consumed by absolute pinned path rather than a local
-path, because a called workflow resolves local paths against the
-caller's checkout. This matches `coverage.yaml` and the `setup-rust`
-action.
+The workflow runs against this repository alone for now and reaches
+the action by local path. Sharing it with `praxis`, `ai`, and `policy`
+is a follow-up; see
+[Sharing With Other Repositories](#sharing-with-other-repositories).
 
 ## What Counts As A Response
 
@@ -250,6 +250,12 @@ Organization **Members: read** is *not* needed. Assignees are
 classified as people or apps from the API's own `type` field, so no
 membership lookup happens.
 
+The workflow requests exactly these permissions when it mints the
+token, rather than inheriting whatever the installation happens to
+hold. A permission the installation lacks makes the token step fail
+outright, which is the intended behavior: better a loud failure than
+a run that silently cannot write.
+
 ### Installation Access
 
 There is one installation of praxis-bot on the `praxis-proxy`
@@ -290,10 +296,35 @@ Suggested order:
 3. Enable `apply-reminders`.
 4. Only then add a schedule.
 
-### Per-Repository Caller
+## Sharing With Other Repositories
 
-Each repository adds its own caller. Pin to a released tag of this
-repository:
+Not wired up yet, deliberately. A workflow that other repositories
+call cannot reach the action by local path, because a called workflow
+resolves local paths against the **caller's** checkout, where the
+action does not exist. It has to use an absolute, SHA-pinned
+reference:
+
+```yaml
+uses: praxis-proxy/conventions/.github/actions/review-tracker@<sha>
+```
+
+That `<sha>` must be a commit on this repository's default branch.
+Since this repository squash-merges, a pre-merge branch commit is not
+reachable from `main` afterwards, so a pin written in the same pull
+request that introduces the action would rot. The same reasoning is
+already recorded at the top of `coverage.yaml`, and it is why the
+`praxis` callers pin `2b6bf27`, a commit that is on `main`.
+
+So the order is:
+
+1. Merge this. Validate it here by dispatching against this
+   repository's own pull requests.
+2. Follow up by adding a `workflow_call` trigger to
+   `pr-review-tracker.yaml`, switching the action reference to the
+   absolute pinned form above, and adding a caller to `praxis`, `ai`,
+   and `policy`.
+
+The caller is then the usual thin wrapper:
 
 ```yaml
 name: PR Review Tracker
@@ -327,8 +358,8 @@ jobs:
 
 ### Enabling A Schedule
 
-This repository ships **no** schedule. Once a repository has validated
-the behavior, add a weekday trigger to its own caller:
+This repository ships **no** schedule. Once the behavior has been
+validated, add a weekday trigger:
 
 ```yaml
 on:
@@ -339,9 +370,9 @@ on:
     # ... inputs as above
 ```
 
-A scheduled run gets no `inputs`, so the caller must supply the
-values it wants explicitly rather than relying on
-`${{ inputs.dry-run }}`, which is empty on a schedule:
+A scheduled run gets no `inputs`, so the values must be supplied
+explicitly rather than relying on `${{ inputs.dry-run }}`, which is
+empty on a schedule:
 
 ```yaml
     with:
@@ -364,8 +395,9 @@ cannot be run at all: it does not appear in the Actions UI, and
 'workflow_dispatch' trigger". Once the file is on the default branch,
 a dispatch can select any branch as its ref.
 
-The same applies to the caller workflows: each repository's caller
-must reach its own default branch before it can be dispatched.
+The same will apply to the per-repository callers added in the
+follow-up: each must reach its own default branch before it can be
+dispatched.
 
 So this cannot be exercised end-to-end until it merges. What is
 available before then:

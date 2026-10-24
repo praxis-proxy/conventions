@@ -5,28 +5,26 @@ name: PR Review Tracker
 # ------------------------------------------------------------------------------
 #
 # Reports which current assignees still owe an initial review on the open,
-# ready pull requests of one repository, keeps two fields on the organization
+# ready pull requests of this repository, keeps two fields on the organization
 # project in step, and reminds anyone who is overdue.
 #
 # Defaults are inert: dry run is on and both opt-ins are off, so a run reads
 # only and writes its findings to the job summary. A write needs dry-run set
 # to false AND the matching opt-in set to true. There is deliberately no
-# schedule here; see docs/pr-review-tracker.md for how to add one per
-# repository once the behavior has been validated.
+# schedule here; see docs/pr-review-tracker.md for how to add one once the
+# behavior has been validated.
 #
 # Everything goes through the GitHub API. No pull request is checked out and
 # no pull request code is ever executed, so the only thing this reads from a
 # pull request is data.
 #
-# Other repositories run this same file through workflow_call. The caller job
-# needs no permissions of its own, but must pass the praxis-bot secrets. The
-# action is pinned by SHA rather than referenced by local path, because a
-# called workflow resolves local paths against the caller's checkout.
+# This runs against this repository only. Sharing it with praxis, ai, and
+# policy needs a workflow_call entry point and an absolute, SHA-pinned
+# reference to the action, which cannot be written until the action exists on
+# this repository's default branch. See docs/pr-review-tracker.md.
 #
-# The praxis-bot GitHub App token needs these permissions for this to work:
-#   - Repository "Pull requests": read & write (read PRs and reviews, comment)
-#   - Repository "Issues": read                (timeline events)
-#   - Organization "Projects": read & write    (the two tracked fields)
+# The praxis-bot GitHub App token is requested with exactly the permissions
+# below and no others, rather than inheriting the installation's full set.
 
 on:
   workflow_dispatch:
@@ -47,38 +45,11 @@ on:
         description: Organization project to update
         type: string
         default: "13"
-  workflow_call:
-    inputs:
-      dry-run:
-        description: Report proposed changes without writing anything
-        type: boolean
-        default: true
-      apply-project:
-        description: Write the two project fields; needs dry-run off
-        type: boolean
-        default: false
-      apply-reminders:
-        description: Post reminder comments; needs dry-run off
-        type: boolean
-        default: false
-      project-number:
-        description: Organization project to update
-        type: string
-        default: "13"
-    secrets:
-      PRAXIS_BOT_APP_ID:
-        description: praxis-bot app ID
-        required: true
-      PRAXIS_BOT_APP_PRIVATE_KEY:
-        description: praxis-bot app private key
-        required: true
 
 concurrency:
-  # The suffix keeps this group distinct from a caller's own
-  # `${{ github.workflow }}` group, which would otherwise deadlock. Runs are
-  # serialized rather than cancelled so a run is never killed between posting
-  # a reminder and recording that it did.
-  group: ${{ github.workflow }}-pr-review-tracker-${{ github.repository }}
+  # Runs are serialized rather than cancelled, so a run is never killed
+  # between posting a reminder and recording that it did.
+  group: ${{ github.workflow }}-${{ github.repository }}
   cancel-in-progress: false
 
 permissions: {}
@@ -91,20 +62,29 @@ jobs:
   track:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Generate token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
           private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
+          permission-issues: read
+          permission-pull-requests: write
+          permission-organization-projects: write
 
       # The app slug comes from the token step rather than an input, so the
       # account whose comments are trusted as reminder state is whichever app
       # actually authenticated. A person cannot post as a bot account, so a
       # marker pasted by hand is never mistaken for one the bot wrote.
       - name: Track review responses
-        uses: praxis-proxy/conventions/.github/actions/review-tracker@adcfce8504b9dfc3af69398cb527885e265d3568 # unreleased, after v0.4.0
+        uses: ./.github/actions/review-tracker
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           bot-login: ${{ steps.app-token.outputs.app-slug }}[bot]
