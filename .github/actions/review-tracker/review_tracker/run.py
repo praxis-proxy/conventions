@@ -138,10 +138,12 @@ def _flag(environ, name, default=False):
 def _refresh(client, options, number, now):
     """Re-reads a pull request and recomputes what is due, just before posting.
 
-    Re-fetching state, draft status, assignees, reviews, and comments here is
-    what makes a reminder safe: anything that changed since the scan, such as
-    a review arriving or the author converting the pull request back to
-    draft, suppresses the reminder.
+    Everything the decision rests on is fetched again: the pull request
+    itself, its timeline, its reviews, and its comments. The timeline matters
+    as much as the rest, because the assignment and draft-to-ready timestamps
+    are recomputed from it. Re-reading the assignee list alone would miss
+    somebody unassigned and reassigned between the two reads: the list looks
+    unchanged while the assignment start, and so the reminder key, has moved.
     """
     repo = options.repository
     pull = client.rest("GET", f"/repos/{repo}/pulls/{number}")
@@ -283,7 +285,7 @@ def _sync_project(client, options, tracked, skipped, now, report):
         report.failures.append(f"project #{options.project}: {error}")
         return
 
-    writer = board.Writer(client, fields, options.write_project)
+    writer = board.Writer(client, fields, options.write_project, options.repository)
     covered = set()
 
     for item in existing:

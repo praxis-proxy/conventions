@@ -170,11 +170,36 @@ Guarantees:
   than writing to the wrong field.
 - The writer refuses any field ID other than the two resolved ones,
   and can only ever name the project it resolved.
+- The writer refuses any item belonging to a different repository.
+  See [Other repositories' items](#other-repositories-items).
 - Current values are read first; a field already holding the right
   value is not rewritten.
 - A pull request with no item on the project is **reported**, never
   added. Importing work onto the board is a human decision.
 - No colors, no status field, nothing else is touched.
+
+### Other Repositories' Items
+
+Project #13 is shared by every repository in the organization, and the
+tracker runs once per repository. A run must therefore touch only the
+items for its own repository, and clearing is where that matters most:
+an unscoped clear would wipe the fields of every other repository's
+pull requests on every run.
+
+Pull request numbers also repeat across repositories, so `#1` on
+`praxis` and `#1` on `ai` are different items. Matching on the number
+alone would cross the streams.
+
+Two independent checks, either of which is sufficient:
+
+1. Items are filtered to the run's repository when the board is read,
+   so the rest of the run never sees a foreign item.
+2. The writer re-checks the repository on every item it is handed and
+   refuses the write otherwise, the same way it refuses a field it
+   does not own.
+
+Removing either one alone still leaves the other repositories
+untouched; removing both is caught by four tests.
 
 ## Reminders
 
@@ -185,9 +210,14 @@ The comment mentions only the people who are currently assigned, still
 owe an initial review, and have reached their threshold:
 
 ```text
-@ada — a reminder that this PR is awaiting your initial review.
-You were assigned 3 business days ago.
+@ada — This PR has been awaiting your initial review for 3 business days.
 ```
+
+The message reports how long the review has been **owed**, not how
+long ago the person was assigned. Those differ whenever a
+draft-to-ready transition moved the clock, so wording it as "assigned
+N business days ago" would be wrong on exactly the pull requests that
+bounce through draft most often.
 
 Multiple assignees on one pull request are evaluated independently and
 can be at different stages; one comment per run carries a line for
@@ -242,9 +272,18 @@ Three layers:
 
 1. The workflow's `concurrency` group serializes runs per repository.
 2. Every pull request is fully re-read immediately before posting:
-   state, draft status, assignees, reviews, and comments. Anything
-   that changed since the scan suppresses the reminder.
+   the pull request itself, its **timeline**, its reviews, and its
+   comments. Anything that changed since the scan suppresses the
+   reminder.
 3. The marker check runs against that fresh comment list.
+
+The timeline is re-read, not just the assignee list, and the
+assignment and draft-to-ready timestamps are recomputed from it.
+Comparing assignee lists alone would miss somebody unassigned and
+reassigned between the two reads: the list looks identical while the
+assignment start, and therefore the reminder key, has moved. Taking
+the stale key there would either silence a reminder that is now owed
+afresh or fire one against a spent marker.
 
 Skipped automatically: drafts, closed pull requests, people who have
 responded, people no longer assigned, and anyone already reminded

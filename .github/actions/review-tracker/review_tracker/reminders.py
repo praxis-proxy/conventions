@@ -120,11 +120,14 @@ def render(due):
     lines = [marker(item.login, item.assigned_at, item.stage) for item in due]
     lines.append("")
 
+    # The wait is counted from the assignment or from the most recent
+    # draft-to-ready transition, whichever is later, so the message says how
+    # long the review has been owed rather than how long ago it was assigned.
     for item in due:
         unit = "day" if item.business_days == 1 else "days"
         lines.append(
-            f"@{item.login} — a reminder that this PR is awaiting your initial "
-            f"review. You were assigned {item.business_days} business {unit} ago."
+            f"@{item.login} — This PR has been awaiting your initial review "
+            f"for {item.business_days} business {unit}."
         )
         lines.append("")
 

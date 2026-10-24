@@ -92,7 +92,7 @@ class Items(unittest.TestCase):
 class Writes(unittest.TestCase):
     def test_sets_both_fields(self):
         api = FakeApi()
-        writer = Writer(api, fields(), enabled=True)
+        writer = Writer(api, fields(), enabled=True, repository=REPO)
 
         changes = writer.apply(item(), "ada, grace", 4)
 
@@ -105,7 +105,7 @@ class Writes(unittest.TestCase):
 
     def test_skips_values_already_correct(self):
         api = FakeApi()
-        writer = Writer(api, fields(), enabled=True)
+        writer = Writer(api, fields(), enabled=True, repository=REPO)
 
         changes = writer.apply(item(awaiting="ada", oldest=4), "ada", 4)
 
@@ -114,7 +114,7 @@ class Writes(unittest.TestCase):
 
     def test_treats_an_integer_and_float_as_equal(self):
         api = FakeApi()
-        writer = Writer(api, fields(), enabled=True)
+        writer = Writer(api, fields(), enabled=True, repository=REPO)
 
         writer.apply(item(awaiting="ada", oldest=4.0), "ada", 4)
 
@@ -122,7 +122,7 @@ class Writes(unittest.TestCase):
 
     def test_clears_both_fields(self):
         api = FakeApi()
-        writer = Writer(api, fields(), enabled=True)
+        writer = Writer(api, fields(), enabled=True, repository=REPO)
 
         changes = writer.apply(item(awaiting="ada", oldest=4), "", None)
 
@@ -134,7 +134,7 @@ class Writes(unittest.TestCase):
 
     def test_reports_without_writing_when_disabled(self):
         api = FakeApi()
-        writer = Writer(api, fields(), enabled=False)
+        writer = Writer(api, fields(), enabled=False, repository=REPO)
 
         changes = writer.apply(item(), "ada", 4)
 
@@ -142,14 +142,28 @@ class Writes(unittest.TestCase):
         self.assertEqual(api.mutations, [], "a dry run must not mutate anything")
 
     def test_refuses_a_field_it_does_not_own(self):
-        writer = Writer(FakeApi(), fields(), enabled=True)
+        writer = Writer(FakeApi(), fields(), enabled=True, repository=REPO)
 
         with self.assertRaises(ApiError):
             writer._write("i1", "PVTF_status", {"text": "Done"})
 
+    def test_refuses_an_item_from_another_repository(self):
+        api = FakeApi()
+        writer = Writer(api, fields(), enabled=True, repository=REPO)
+
+        foreign = item(awaiting="bob", oldest=9, repository="praxis-proxy/ai")
+
+        with self.assertRaises(ApiError) as caught:
+            writer.apply(foreign, "", None)
+
+        self.assertIn(
+            "praxis-proxy/ai", str(caught.exception), "the foreign item is named"
+        )
+        self.assertEqual(api.mutations, [], "nothing is written before the refusal")
+
     def test_only_ever_names_the_resolved_project_and_fields(self):
         api = FakeApi()
-        writer = Writer(api, fields(), enabled=True)
+        writer = Writer(api, fields(), enabled=True, repository=REPO)
 
         writer.apply(item(), "ada", 4)
         writer.apply(item(awaiting="ada", oldest=4), "", None)
@@ -177,9 +191,15 @@ def fields():
     return Fields(project_id=PROJECT_ID, awaiting_id=AWAITING_ID, oldest_id=OLDEST_ID)
 
 
-def item(awaiting="", oldest=None):
+def item(awaiting="", oldest=None, repository=REPO):
     """A project item with the given current field values."""
-    return Item(number=1, item_id="i1", awaiting=awaiting, oldest=oldest)
+    return Item(
+        number=1,
+        repository=repository,
+        item_id="i1",
+        awaiting=awaiting,
+        oldest=oldest,
+    )
 
 
 if __name__ == "__main__":

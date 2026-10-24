@@ -85,22 +85,34 @@ class Fields:
 
 @dataclass(frozen=True)
 class Item:
-    """A project item standing for a pull request, with its current values."""
+    """A project item standing for a pull request, with its current values.
+
+    `repository` is carried so a write can be checked against the repository
+    the run is for. One project holds items from every repository in the
+    organization, and pull request numbers repeat across them.
+    """
 
     number: int
+    repository: str
     item_id: str
     awaiting: str
     oldest: object
 
 
 class Writer:
-    """Applies field changes, refusing anything outside the two allowed fields."""
+    """Applies field changes, refusing anything it does not own.
 
-    def __init__(self, api, fields, enabled):
+    Two things are owned: the project and fields resolved at startup, and the
+    one repository this run is for. A run against one repository must never
+    disturb another repository's items, which share the same board.
+    """
+
+    def __init__(self, api, fields, enabled, repository):
         """Builds a writer; with `enabled` false it reports without mutating."""
         self._api = api
         self._enabled = enabled
         self._fields = fields
+        self._repository = repository
 
     def apply(self, item, awaiting, oldest):
         """Writes both fields for one item, skipping values already correct.
@@ -108,6 +120,12 @@ class Writer:
         Returns a description of each change, whether or not it was applied,
         so a dry run reports exactly what a live run would do.
         """
+        if item.repository != self._repository:
+            raise ApiError(
+                f"refusing to write {item.repository}#{item.number} "
+                f"from a {self._repository} run"
+            )
+
         changes = []
 
         if (item.awaiting or "") != (awaiting or ""):
@@ -172,7 +190,13 @@ class Writer:
 
 
 def items(api, organization, number, repository):
-    """Every project item for a pull request in `repository`, with its values."""
+    """Every project item for a pull request in `repository`, with its values.
+
+    Items belonging to any other repository are dropped here, so the rest of
+    the run never sees them. [Writer] checks the same thing again at the point
+    of mutation, because a board shared by every repository in the
+    organization is an easy place to do collateral damage.
+    """
     found = []
     cursor = None
 
@@ -193,6 +217,7 @@ def items(api, organization, number, repository):
             found.append(
                 Item(
                     number=content["number"],
+                    repository=owner,
                     item_id=node["id"],
                     awaiting=(node.get("awaiting") or {}).get("text") or "",
                     oldest=(node.get("oldest") or {}).get("number"),

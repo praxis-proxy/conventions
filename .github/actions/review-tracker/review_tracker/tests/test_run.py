@@ -144,6 +144,43 @@ class Clearing(unittest.TestCase):
             "dismissal must not restart the reminder sequence",
         )
 
+    def test_leaves_other_repositories_items_untouched(self):
+        foreign = [
+            item_node("ai-1", 1, "praxis-proxy/ai", awaiting="bob", oldest=9),
+            item_node("pol-7", 7, "praxis-proxy/policy", awaiting="carol", oldest=4),
+        ]
+        api = standard(
+            item_pages=[foreign + [item_node("i1", 1, REPO, awaiting="stale", oldest=99)]]
+        )
+
+        run(api, options(DRY_RUN="false", APPLY_PROJECT="true"), NOW)
+
+        touched = {variables["item"] for _, variables in api.mutations}
+        self.assertEqual(
+            touched,
+            {"i1"},
+            "a run for one repository must only ever write its own items",
+        )
+
+    def test_does_not_clear_a_same_numbered_pull_request_elsewhere(self):
+        api = standard(
+            item_pages=[
+                [
+                    item_node("ai-1", 1, "praxis-proxy/ai", awaiting="bob", oldest=9),
+                    item_node("i1", 1, REPO),
+                ]
+            ]
+        )
+
+        run(api, options(DRY_RUN="false", APPLY_PROJECT="true"), NOW)
+
+        touched = {variables["item"] for _, variables in api.mutations}
+        self.assertNotIn(
+            "ai-1",
+            touched,
+            "pull request numbers repeat across repositories; the item must not collide",
+        )
+
     def test_reports_a_pull_request_with_no_project_item(self):
         report = run(standard(item_pages=[[]]), options(), NOW)
 
@@ -231,16 +268,62 @@ class RefreshBeforePosting(unittest.TestCase):
 
         self.assertEqual(api.posted, [], "a review landing mid-run cancels the reminder")
 
+    def test_detects_a_reassignment_between_the_two_reads(self):
+        reassigned = "2026-06-04T09:00:00Z"
+        api = ChangingApi(
+            **standard_kwargs(
+                comments=[marker_comment("ada", ASSIGNED, 1, "2026-06-04T08:00:00Z")]
+            ),
+            after={
+                f"/repos/{REPO}/issues/1/timeline": [
+                    {"event": "assigned", "assignee": {"login": "ada"},
+                     "created_at": ASSIGNED},
+                    {"event": "unassigned", "assignee": {"login": "ada"},
+                     "created_at": "2026-06-04T08:30:00Z"},
+                    {"event": "assigned", "assignee": {"login": "ada"},
+                     "created_at": reassigned},
+                ]
+            },
+        )
+
+        run(api, options(DRY_RUN="false", APPLY_REMINDERS="true"), NOW)
+
+        self.assertEqual(
+            api.posted,
+            [],
+            "the fresh assignment is only minutes old, so nothing is due yet",
+        )
+
+    def test_an_old_marker_does_not_silence_a_new_assignment(self):
+        spent = "2026-05-15T10:00:00Z"
+        api = ChangingApi(
+            **standard_kwargs(
+                comments=[marker_comment("ada", spent, 2, "2026-05-20T08:00:00Z")]
+            ),
+            after={
+                f"/repos/{REPO}/issues/1/timeline": [
+                    {"event": "assigned", "assignee": {"login": "ada"},
+                     "created_at": spent},
+                    {"event": "unassigned", "assignee": {"login": "ada"},
+                     "created_at": "2026-05-20T10:00:00Z"},
+                    {"event": "assigned", "assignee": {"login": "ada"},
+                     "created_at": ASSIGNED},
+                ]
+            },
+        )
+
+        run(api, options(DRY_RUN="false", APPLY_REMINDERS="true"), NOW)
+
+        self.assertEqual(len(api.posted), 1, "the new assignment earns a reminder")
+        self.assertIn(
+            "@ada",
+            api.posted[0][1]["body"],
+            "a spent marker from a previous assignment must not silence this one",
+        )
+
     def test_suppresses_when_a_reminder_already_exists(self):
         api = standard(
-            comments=[
-                {
-                    "body": '<!-- praxis-review-reminder {"assigned_at":'
-                    '"2026-06-01T10:00:00Z","login":"ada","stage":1} -->',
-                    "created_at": "2026-06-04T09:00:00Z",
-                    "user": {"login": BOT, "type": "Bot"},
-                }
-            ]
+            comments=[marker_comment("ada", ASSIGNED, 1, "2026-06-04T09:00:00Z")]
         )
 
         run(api, options(DRY_RUN="false", APPLY_REMINDERS="true"), NOW)
@@ -344,6 +427,15 @@ def standard_kwargs(timeline=None, reviews=None, comments=None, item_pages=None,
 def draft_pull():
     """A draft pull request, which must never be scanned."""
     return {"number": 2, "state": "open", "draft": True, "assignees": []}
+
+
+def marker_comment(login, assigned_at, stage, posted_at):
+    """A reminder comment the bot itself posted."""
+    body = (
+        f'<!-- praxis-review-reminder {{"assigned_at":"{assigned_at}",'
+        f'"login":"{login}","stage":{stage}}} -->'
+    )
+    return {"body": body, "created_at": posted_at, "user": {"login": BOT, "type": "Bot"}}
 
 
 if __name__ == "__main__":

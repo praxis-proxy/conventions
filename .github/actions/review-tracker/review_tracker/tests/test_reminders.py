@@ -3,7 +3,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from ..reminders import due_reminders, marker, parse_records, render
+from ..reminders import Due, due_reminders, marker, parse_records, render
 from ..tracking import Outstanding
 
 BOT = "praxis-bot[bot]"
@@ -184,12 +184,48 @@ class Rendering(unittest.TestCase):
         body = render(due)
 
         self.assertIn(
-            "@ada — a reminder that this PR is awaiting your initial review. "
-            "You were assigned 3 business days ago.",
+            "@ada — This PR has been awaiting your initial review for "
+            "3 business days.",
             body,
             "the reminder must read as specified",
         )
         self.assertIn("@grace", body, "both due assignees are mentioned")
+
+    def test_does_not_claim_the_wait_began_at_assignment(self):
+        body = render(due_reminders([owed("ada")], [], THIRD_DAY)[0])
+        prose = "\n".join(
+            line for line in body.splitlines() if not line.startswith("<!--")
+        )
+
+        self.assertNotIn(
+            "assigned",
+            prose,
+            "a ready transition can move the clock, so the prose must not "
+            "promise the wait started at assignment",
+        )
+
+    def test_counts_from_the_ready_transition_not_the_assignment(self):
+        ready = datetime(2026, 6, 3, 10, 0, tzinfo=timezone.utc)
+        late = datetime(2026, 6, 8, 10, 0, tzinfo=timezone.utc)
+        item = Outstanding("ada", ASSIGNED, ready)
+
+        due, _ = due_reminders([item], [], late)
+
+        self.assertEqual(
+            due[0].business_days,
+            3,
+            "the wait runs from the ready transition, not the earlier assignment",
+        )
+        self.assertIn(
+            "for 3 business days.",
+            render(due),
+            "the message reports the wait, which is shorter than the assignment age",
+        )
+
+    def test_uses_the_singular_for_one_day(self):
+        body = render([Due("ada", ASSIGNED, 1, 1)])
+
+        self.assertIn("for 1 business day.", body, "one day is singular")
 
     def test_records_a_marker_for_everyone_mentioned(self):
         due, _ = due_reminders([owed("ada"), owed("grace")], [], THIRD_DAY)
