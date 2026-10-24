@@ -30,6 +30,9 @@ a project.
 - **Issue hygiene**: new issues are flagged for triage,
   and anyone assigned to an issue that hasn't been
   triaged yet is unassigned
+- **Review hygiene**: assignees who owe an initial review
+  are surfaced on the project board and reminded when
+  they are overdue
 - **Everything else**: markdown, TOML, shell, spelling,
   and workflow files are linted too
 
@@ -53,6 +56,7 @@ make help           # every available target
 | [development.md](docs/development.md) | Requirements, build/test/coverage commands |
 | [enhancements](https://github.com/praxis-proxy/enhancements) | Proposal lifecycle for larger changes |
 | [release.md](docs/release.md) | Versioning, tagging, release pipeline |
+| [pr-review-tracker.md](docs/pr-review-tracker.md) | Review response tracking, reminders, rollout |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor entry point and PR gates |
 
 ## Scaffolding a New Project
@@ -83,6 +87,7 @@ pinned to a tagged commit of this repository:
 | `pr-conventions.yaml` | `max-additions`, `bypass-teams`, `conventions-doc`, `commit-subject-pattern`, `commit-subject-max-length`, `dco-check`, `dep-version-check` |
 | `pr-housekeeping.yaml` | `stale-draft-days`, `stale-days` |
 | `pr-assignees.yaml` | `maintainer-teams`, `reviewer-teams` |
+| `pr-review-tracker.yaml` | `dry-run`, `apply-project`, `apply-reminders`, `project-number` |
 | `issue-triage.yaml` | `policy-doc` |
 | `automated-review.yaml` | `pr_number`, `model`, `prompt-path`, `cloud-ml-region`, `gcp-project-id` |
 | `publish-dry-run.yaml` | `make-args` |

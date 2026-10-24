@@ -185,3 +185,25 @@ never removes anyone, and it only runs again if the PR
 is reopened, or goes back to draft and is marked ready.
 
 [assignees]: ../.github/workflows/pr-assignees.yaml
+
+### Pull Request Review Responses
+
+Being assigned to a pull request means you owe it an
+initial review. The [review tracker][tracker] shows who
+has not responded yet on [project #13][board], in the
+"Awaiting response from" and "Oldest outstanding
+response (days)" fields, and reminds anyone who has owed
+a review for three business days, once more three
+business days after that, and then stops.
+
+A submitted review of any kind (approve, request
+changes, or comment) stops your timer. Leaving an
+ordinary comment does not, and neither does starting a
+review you have not submitted.
+
+See [pr-review-tracker.md] for the exact calculations,
+the permissions involved, and how to turn it on.
+
+[board]: https://github.com/orgs/praxis-proxy/projects/13
+[pr-review-tracker.md]: ./pr-review-tracker.md
+[tracker]: ../.github/workflows/pr-review-tracker.yaml
