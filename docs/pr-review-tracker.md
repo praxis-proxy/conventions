@@ -488,6 +488,22 @@ available before then:
   Tracking later review rounds is deliberately out of scope here.
 - **No holiday calendar.** A reminder can land during somebody's
   holiday or a public holiday in their country.
+- **Responsiveness is not quality.** Any submitted review stops the
+  timer, including a `COMMENTED` one that says nothing useful. The
+  tracker measures whether somebody responded, not whether the
+  response helped, and no mechanical check separates the two: an
+  empty body is detectable, "lgtm" is not. Filtering on content would
+  move the goalposts without closing the gap.
+- **A duplicate reminder is possible in theory.** The workflow's
+  concurrency group serializes runs per repository, so two scheduled
+  or dispatched runs cannot overlap. If that is bypassed, say by a
+  local run alongside a workflow run, there is a window between the
+  pre-posting refresh and the comment itself where both could decide
+  to post. The result is a duplicate mention and nothing worse:
+  duplicate markers cannot advance somebody a stage early, because
+  the stage used is the highest recorded, and the follow-up anchors
+  on the earliest posting of the current stage. Closing the window
+  would need a lock, which costs more than the failure it prevents.
 - **Timeline retention.** If an `assigned` event cannot be found for a
   current assignee, the pull request is reported and skipped. The
   start is never guessed from the pull request's creation or update
