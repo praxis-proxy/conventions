@@ -97,8 +97,11 @@ def parse_timestamp(value):
 def _weekdays_through(day):
     """Count of Monday-to-Friday dates from the proleptic epoch through `day`.
 
-    Ordinal 1 is a Monday, so each whole week contributes five weekdays and the
-    remainder contributes at most five more.
+    Ordinal 1 is a Monday, so `ordinal % 7` maps 1 through 5 to Monday through
+    Friday, 6 to Saturday, and 0 to Sunday. Each whole week therefore
+    contributes five weekdays, and clamping the remainder at five discards the
+    weekend in both of the cases that need it: Saturday by truncation, Sunday
+    by already having rolled into the next week.
     """
     weeks, remainder = divmod(day.toordinal(), DAYS_PER_WEEK)
     return weeks * WEEKDAYS_PER_WEEK + min(remainder, WEEKDAYS_PER_WEEK)

@@ -1,9 +1,10 @@
 """Calendar-day and business-day arithmetic."""
 
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from ..bizdays import (
+    _weekdays_through,
     add_business_days,
     business_days_elapsed,
     calendar_days_elapsed,
@@ -97,6 +98,22 @@ class BusinessDays(unittest.TestCase):
             0,
             "a start after now reports no elapsed business days",
         )
+
+    def test_weekday_count_matches_a_direct_count(self):
+        start = date(2028, 1, 1)
+        base = _weekdays_through(start - timedelta(days=1))
+        expected = 0
+
+        for offset in range(400):
+            day = start + timedelta(days=offset)
+            if day.weekday() < 5:
+                expected += 1
+
+            self.assertEqual(
+                _weekdays_through(day) - base,
+                expected,
+                f"the ordinal arithmetic must match a direct count through {day}",
+            )
 
     def test_elapsed_inverts_add_business_days(self):
         for start_offset in range(0, 7 * 24, 7):
