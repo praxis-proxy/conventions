@@ -174,7 +174,16 @@ def _latest_ready(timeline, ambiguities):
 
 
 def _responses(reviews, ambiguities):
-    """Earliest submitted review per login.
+    """Latest submitted review per login.
+
+    The question this answers is whether somebody reviewed at or after their
+    current assignment began, so the most recent review is the one that
+    settles it. Taking the earliest instead would let a review submitted
+    before the assignment mask every later one, leaving somebody who reviewed
+    a pull request and was assigned to it afterwards outstanding forever.
+
+    A review from a previous assignment still does not discharge the current
+    one: it stays behind the new start, so the comparison fails as it should.
 
     A review only counts with a usable `submitted_at`, which is the evidence
     that it was submitted rather than merely started. A review in a counting
@@ -186,7 +195,7 @@ def _responses(reviews, ambiguities):
     are already excluded from the assignee list, so a bot review can never
     discharge a person.
     """
-    earliest = {}
+    latest = {}
     for review in reviews:
         state = (review.get("state") or "").upper()
         if state not in RESPONSE_STATES:
@@ -201,7 +210,7 @@ def _responses(reviews, ambiguities):
             ambiguities.append(f"@{login} has a {state} review with no submitted_at")
             continue
 
-        if login not in earliest or moment < earliest[login]:
-            earliest[login] = moment
+        if login not in latest or moment > latest[login]:
+            latest[login] = moment
 
-    return earliest
+    return latest
