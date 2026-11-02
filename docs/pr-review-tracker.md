@@ -58,6 +58,12 @@ A review counts when it was submitted at or after the reviewer's
 current assignment began. A review given while the pull request was
 still a draft still counts: it is a real initial response.
 
+Only the most recent review from a person is weighed against their
+assignment, because that is the one that settles whether they have
+answered it. Reviewing a pull request and being assigned to it
+afterwards is ordinary, and that earlier review neither discharges the
+later assignment nor hides the review that does.
+
 ### Dismissal
 
 `DISMISSED` counts because dismissal is something done to a review

@@ -155,6 +155,50 @@ class Responses(unittest.TestCase):
             "a review predating the assignment is not a response to it",
         )
 
+    def test_a_review_before_assignment_does_not_mask_a_later_one(self):
+        # Reviewing a pull request and being assigned to it afterwards is
+        # ordinary: a maintainer looks at something, then picks it up. The
+        # earlier review must not hide the one that actually answers the
+        # assignment, which it did while only the first was consulted.
+        reviews = [
+            review("ada", "COMMENTED", at(1)),
+            review("ada", "APPROVED", at(7)),
+        ]
+
+        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews)
+
+        self.assertEqual(
+            result.outstanding,
+            (),
+            "a review after the assignment counts even with an earlier one",
+        )
+
+    def test_only_reviews_from_a_previous_assignment_stay_outstanding(self):
+        # The mirror image: every review predates the current assignment, so
+        # taking the most recent one must still leave the person outstanding.
+        timeline = [
+            assigned("ada", at(1)),
+            unassigned("ada", at(8)),
+            assigned("ada", at(9)),
+        ]
+        reviews = [
+            review("ada", "COMMENTED", at(2)),
+            review("ada", "APPROVED", at(4)),
+        ]
+
+        result = track(pull(["ada"]), timeline, reviews)
+
+        self.assertEqual(
+            [item.login for item in result.outstanding],
+            ["ada"],
+            "reviews from a previous assignment do not discharge a new one",
+        )
+        self.assertEqual(
+            result.outstanding[0].assigned_at,
+            moment(9),
+            "the wait runs from the reassignment",
+        )
+
     def test_a_review_during_draft_counts(self):
         timeline = [assigned("ada", at(1)), ready(at(9))]
         reviews = [review("ada", "CHANGES_REQUESTED", at(4))]
