@@ -382,6 +382,10 @@ Suggested order:
 3. Enable `apply-reminders`.
 4. Only then add a schedule.
 
+`praxis`, `ai`, and `policy` completed this on 2026-11-03 and now run
+on a weekday schedule with both opt-ins on. This repository has no
+caller of its own; its pull requests are not tracked.
+
 ## Per-Repository Caller
 
 Each repository adds its own caller, pinned to a released tag of this
@@ -439,9 +443,16 @@ empty on a schedule:
 ```yaml
     with:
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || false }}
-      apply-project: true
-      apply-reminders: true
+      apply-project: ${{ github.event_name != 'workflow_dispatch' || inputs.apply-project }}
+      apply-reminders: ${{ github.event_name != 'workflow_dispatch' || inputs.apply-reminders }}
 ```
+
+The two opt-ins stay bound to `inputs` rather than being hardcoded to
+`true`. On a schedule the first operand is false either way, so the
+run is fully live; on a dispatch the checkboxes keep meaning what they
+say. Hardcoding them would leave two toggles in the Actions UI that
+silently do nothing, the dangerous one being an unchecked
+`apply-reminders` that comments anyway.
 
 Pick a time that is a working morning for the people being reminded.
 Scheduled workflows on GitHub are best-effort and can be delayed under
