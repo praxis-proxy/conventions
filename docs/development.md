@@ -200,11 +200,17 @@ response (days)" fields, and reminds anyone who has owed
 a review for three business days, once more three
 business days after that, and then stops.
 
-A submitted review of any kind (approve, request
-changes, or comment) stops your timer, and it stays
-stopped even if that review is later dismissed. Leaving
-an ordinary comment does not stop it, and neither does
-starting a review you have not submitted.
+Two things stop your timer: a submitted review of any
+kind (approve, request changes, or comment), and an
+ordinary comment on the pull request. Either way it
+stays stopped, and a review being dismissed afterwards
+does not restart it. Answering in the conversation
+counts because the tracker measures whether you
+responded, not which button you used.
+
+Starting a review you have not submitted does not stop
+it, and neither does replying inside an existing review
+thread on its own.
 
 See [pr-review-tracker.md] for the exact calculations,
 the permissions involved, and how to turn it on.
