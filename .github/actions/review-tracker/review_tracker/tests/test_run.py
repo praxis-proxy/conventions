@@ -118,6 +118,40 @@ class Clearing(unittest.TestCase):
             "a discharged pull request has both fields cleared",
         )
 
+    def test_clears_and_sends_nothing_after_a_plain_comment(self):
+        """The scan must read comments, not just reviews.
+
+        This is the wiring `_scan` would otherwise miss: it fetched only the
+        timeline and the reviews, so somebody who answered in the conversation
+        stayed on the board and got reminded.
+        """
+        api = standard(
+            comments=[
+                {
+                    "user": {"login": "ada", "type": "User"},
+                    "created_at": "2026-06-02T10:00:00Z",
+                }
+            ],
+            item_pages=[[item_node("i1", 1, REPO, awaiting="ada", oldest=1)]],
+        )
+
+        run(api, options(DRY_RUN="false", APPLY_PROJECT="true",
+                         APPLY_REMINDERS="true"), NOW)
+
+        self.assertIn(
+            ("GET", f"/repos/{REPO}/issues/1/comments"),
+            api.requests,
+            "the scan reads the comments feed",
+        )
+        self.assertEqual(
+            [name for name, _ in api.mutations],
+            ["clear", "clear"],
+            "a comment discharges the pull request",
+        )
+        self.assertEqual(
+            api.posted, [], "somebody who commented is not reminded"
+        )
+
     def test_clears_and_sends_nothing_after_a_dismissed_review(self):
         api = standard(
             reviews=[

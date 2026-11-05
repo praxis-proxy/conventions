@@ -151,7 +151,7 @@ def _refresh(client, options, number, now):
     reviews = client.paginate(f"/repos/{repo}/pulls/{number}/reviews")
     comments = client.paginate(f"/repos/{repo}/issues/{number}/comments")
 
-    result = track(pull, timeline, reviews)
+    result = track(pull, timeline, reviews, comments)
     records, notes = parse_records(comments, options.bot_login)
     if not result.trustworthy:
         return [], list(result.ambiguities) + notes
@@ -213,12 +213,13 @@ def _scan(client, options, report):
         try:
             timeline = client.paginate(f"/repos/{repo}/issues/{number}/timeline")
             reviews = client.paginate(f"/repos/{repo}/pulls/{number}/reviews")
+            comments = client.paginate(f"/repos/{repo}/issues/{number}/comments")
         except ApiError as error:
             report.failures.append(f"#{number}: could not be read: {error}")
             skipped.add(number)
             continue
 
-        result = track(pull, timeline, reviews)
+        result = track(pull, timeline, reviews, comments)
         report.ambiguities.extend(f"#{number}: {note}" for note in result.ambiguities)
 
         if result.trustworthy:

@@ -10,7 +10,7 @@ NOW = datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc)
 
 class Assignment(unittest.TestCase):
     def test_tracks_an_initial_assignment(self):
-        result = track(pull(["ada"]), [assigned("ada", at(1))], [])
+        result = track(pull(["ada"]), [assigned("ada", at(1))], [], [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -26,7 +26,7 @@ class Assignment(unittest.TestCase):
     def test_drops_someone_unassigned(self):
         timeline = [assigned("ada", at(1)), unassigned("ada", at(2))]
 
-        result = track(pull([]), timeline, [])
+        result = track(pull([]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding, (), "an unassigned person owes nothing"
@@ -39,7 +39,7 @@ class Assignment(unittest.TestCase):
             assigned("ada", at(8)),
         ]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding[0].assigned_at,
@@ -50,7 +50,7 @@ class Assignment(unittest.TestCase):
     def test_does_not_reset_on_a_repeated_assignment(self):
         timeline = [assigned("ada", at(1)), assigned("ada", at(8))]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding[0].assigned_at,
@@ -61,7 +61,7 @@ class Assignment(unittest.TestCase):
     def test_replays_events_out_of_order(self):
         timeline = [unassigned("ada", at(2)), assigned("ada", at(1))]
 
-        result = track(pull([]), timeline, [])
+        result = track(pull([]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding,
@@ -73,7 +73,7 @@ class Assignment(unittest.TestCase):
         timeline = [assigned("praxis-bot[bot]", at(1))]
         subject = pull([{"login": "praxis-bot[bot]", "type": "Bot"}])
 
-        result = track(subject, timeline, [])
+        result = track(subject, timeline, [], [])
 
         self.assertEqual(result.outstanding, (), "apps are not asked for reviews")
 
@@ -82,7 +82,7 @@ class DraftAndReady(unittest.TestCase):
     def test_counts_from_ready_when_assignment_came_first(self):
         timeline = [assigned("ada", at(1)), ready(at(3))]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding[0].effective_start,
@@ -93,7 +93,7 @@ class DraftAndReady(unittest.TestCase):
     def test_keeps_the_assignment_when_it_came_after_ready(self):
         timeline = [ready(at(1)), assigned("ada", at(3))]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding[0].effective_start,
@@ -104,7 +104,7 @@ class DraftAndReady(unittest.TestCase):
     def test_the_most_recent_ready_wins(self):
         timeline = [assigned("ada", at(1)), ready(at(2)), ready(at(9))]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertEqual(
             result.outstanding[0].effective_start,
@@ -113,7 +113,7 @@ class DraftAndReady(unittest.TestCase):
         )
 
     def test_uses_the_assignment_when_never_a_draft(self):
-        result = track(pull(["ada"]), [assigned("ada", at(1))], [])
+        result = track(pull(["ada"]), [assigned("ada", at(1))], [], [])
 
         self.assertEqual(
             result.outstanding[0].effective_start,
@@ -124,14 +124,14 @@ class DraftAndReady(unittest.TestCase):
     def test_skips_a_draft_pull_request(self):
         subject = pull(["ada"], draft=True)
 
-        result = track(subject, [assigned("ada", at(1))], [])
+        result = track(subject, [assigned("ada", at(1))], [], [])
 
         self.assertEqual(result.outstanding, (), "drafts are not tracked")
 
     def test_skips_a_closed_pull_request(self):
         subject = pull(["ada"], state="closed")
 
-        result = track(subject, [assigned("ada", at(1))], [])
+        result = track(subject, [assigned("ada", at(1))], [], [])
 
         self.assertEqual(result.outstanding, (), "closed pull requests are not tracked")
 
@@ -140,14 +140,14 @@ class Responses(unittest.TestCase):
     def test_a_review_after_assignment_stops_the_timer(self):
         reviews = [review("ada", "APPROVED", at(4))]
 
-        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
 
         self.assertEqual(result.outstanding, (), "an approval is a response")
 
     def test_a_review_before_assignment_does_not_count(self):
         reviews = [review("ada", "COMMENTED", at(1))]
 
-        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -165,7 +165,7 @@ class Responses(unittest.TestCase):
             review("ada", "APPROVED", at(7)),
         ]
 
-        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews, [])
 
         self.assertEqual(
             result.outstanding,
@@ -186,7 +186,7 @@ class Responses(unittest.TestCase):
             review("ada", "APPROVED", at(4)),
         ]
 
-        result = track(pull(["ada"]), timeline, reviews)
+        result = track(pull(["ada"]), timeline, reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -203,7 +203,7 @@ class Responses(unittest.TestCase):
         timeline = [assigned("ada", at(1)), ready(at(9))]
         reviews = [review("ada", "CHANGES_REQUESTED", at(4))]
 
-        result = track(pull(["ada"]), timeline, reviews)
+        result = track(pull(["ada"]), timeline, reviews, [])
 
         self.assertEqual(
             result.outstanding,
@@ -216,7 +216,7 @@ class Responses(unittest.TestCase):
             {"state": "PENDING", "user": {"login": "ada"}, "submitted_at": None}
         ]
 
-        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -227,7 +227,7 @@ class Responses(unittest.TestCase):
     def test_a_dismissed_review_still_counts(self):
         reviews = [review("ada", "DISMISSED", at(4))]
 
-        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
 
         self.assertEqual(
             result.outstanding,
@@ -239,8 +239,8 @@ class Responses(unittest.TestCase):
         timeline = [assigned("ada", at(1))]
         reviews = [review("ada", "DISMISSED", at(4))]
 
-        before = track(pull(["ada"]), timeline, [review("ada", "APPROVED", at(4))])
-        after = track(pull(["ada"]), timeline, reviews)
+        before = track(pull(["ada"]), timeline, [review("ada", "APPROVED", at(4))], [])
+        after = track(pull(["ada"]), timeline, reviews, [])
 
         self.assertEqual(
             after.outstanding,
@@ -253,7 +253,7 @@ class Responses(unittest.TestCase):
             {"state": "DISMISSED", "user": {"login": "ada"}, "submitted_at": None}
         ]
 
-        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -268,7 +268,7 @@ class Responses(unittest.TestCase):
     def test_a_dismissed_review_before_assignment_does_not_count(self):
         reviews = [review("ada", "DISMISSED", at(1))]
 
-        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(5))], reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -279,7 +279,7 @@ class Responses(unittest.TestCase):
     def test_another_persons_review_does_not_count(self):
         reviews = [review("grace", "APPROVED", at(4))]
 
-        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -291,7 +291,7 @@ class Responses(unittest.TestCase):
         timeline = [assigned("ada", at(1)), assigned("grace", at(1))]
         reviews = [review("grace", "APPROVED", at(4))]
 
-        result = track(pull(["ada", "grace"]), timeline, reviews)
+        result = track(pull(["ada", "grace"]), timeline, reviews, [])
 
         self.assertEqual(
             [item.login for item in result.outstanding],
@@ -302,7 +302,7 @@ class Responses(unittest.TestCase):
 
 class IncompleteData(unittest.TestCase):
     def test_reports_a_missing_assignment_event(self):
-        result = track(pull(["ada"]), [], [])
+        result = track(pull(["ada"]), [], [], [])
 
         self.assertEqual(result.outstanding, (), "nothing is assumed about the start")
         self.assertTrue(
@@ -314,7 +314,7 @@ class IncompleteData(unittest.TestCase):
     def test_reports_an_unusable_assignment_timestamp(self):
         timeline = [{"event": "assigned", "assignee": {"login": "ada"}}]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertTrue(
             any("no usable timestamp" in note for note in result.ambiguities),
@@ -326,7 +326,7 @@ class IncompleteData(unittest.TestCase):
             {"state": "APPROVED", "user": {"login": "ada"}, "submitted_at": None}
         ]
 
-        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews)
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
 
         self.assertTrue(
             any("submitted_at" in note for note in result.ambiguities),
@@ -336,7 +336,7 @@ class IncompleteData(unittest.TestCase):
     def test_reports_an_unusable_ready_timestamp(self):
         timeline = [assigned("ada", at(1)), {"event": "ready_for_review"}]
 
-        result = track(pull(["ada"]), timeline, [])
+        result = track(pull(["ada"]), timeline, [], [])
 
         self.assertFalse(result.trustworthy, "an unusable ready event is ambiguous")
 
@@ -345,7 +345,7 @@ class Summary(unittest.TestCase):
     def test_lists_everyone_and_the_longest_wait(self):
         timeline = [assigned("ada", at(1)), assigned("grace", at(5))]
 
-        result = track(pull(["ada", "grace"]), timeline, [])
+        result = track(pull(["ada", "grace"]), timeline, [], [])
         text, oldest = summarize(result.outstanding, NOW)
 
         self.assertEqual(text, "ada, grace", "assignees are listed alphabetically")
@@ -354,6 +354,103 @@ class Summary(unittest.TestCase):
     def test_clears_when_nobody_is_outstanding(self):
         self.assertEqual(
             summarize((), NOW), ("", None), "no outstanding response clears both fields"
+        )
+
+
+class Comments(unittest.TestCase):
+    """A comment answers an assignment the same way a review does.
+
+    The tracker measures whether somebody responded, not how. A detailed
+    review written in the conversation rather than through the review UI is
+    the case that made this necessary: it left real reviewers being told they
+    had been silent for nine business days.
+    """
+
+    def test_a_comment_discharges_the_assignment(self):
+        comments = [comment("ada", at(4))]
+
+        result = track(pull(["ada"]), [assigned("ada", at(1))], [], comments)
+
+        self.assertEqual(
+            result.outstanding,
+            (),
+            "a comment after the assignment is a response",
+        )
+
+    def test_a_comment_before_the_assignment_does_not_discharge_it(self):
+        comments = [comment("ada", at(1))]
+
+        result = track(pull(["ada"]), [assigned("ada", at(5))], [], comments)
+
+        self.assertEqual(
+            [item.login for item in result.outstanding],
+            ["ada"],
+            "a comment predating the assignment leaves it outstanding",
+        )
+
+    def test_a_later_comment_discharges_an_earlier_assignment(self):
+        timeline = [
+            assigned("ada", at(1)),
+            unassigned("ada", at(2)),
+            assigned("ada", at(5)),
+        ]
+        comments = [comment("ada", at(1)), comment("ada", at(7))]
+
+        result = track(pull(["ada"]), timeline, [], comments)
+
+        self.assertEqual(
+            result.outstanding,
+            (),
+            "the most recent comment settles the current assignment",
+        )
+
+    def test_a_bot_comment_never_discharges_anyone(self):
+        comments = [
+            comment("praxis-bot-app[bot]", at(4), kind="Bot"),
+            comment("ada", at(4), kind="Bot"),
+        ]
+
+        result = track(pull(["ada"]), [assigned("ada", at(1))], [], comments)
+
+        self.assertEqual(
+            [item.login for item in result.outstanding],
+            ["ada"],
+            "the tracker's own reminders cannot answer themselves",
+        )
+
+    def test_a_comment_with_no_timestamp_is_reported(self):
+        comments = [{"user": {"login": "ada", "type": "User"}}]
+
+        result = track(pull(["ada"]), [assigned("ada", at(1))], [], comments)
+
+        self.assertFalse(
+            result.trustworthy,
+            "an unusable comment timestamp makes the pull request unsafe to act on",
+        )
+        self.assertIn(
+            "no created_at",
+            " ".join(result.ambiguities),
+            "the ambiguity names the missing field",
+        )
+
+    def test_a_comment_from_someone_else_does_not_discharge_an_assignee(self):
+        comments = [comment("grace", at(4))]
+
+        result = track(pull(["ada"]), [assigned("ada", at(1))], [], comments)
+
+        self.assertEqual(
+            [item.login for item in result.outstanding],
+            ["ada"],
+            "responses are matched to the person who owes one",
+        )
+
+    def test_a_review_still_discharges_without_any_comment(self):
+        reviews = [review("ada", "COMMENTED", at(4))]
+
+        result = track(pull(["ada"]), [assigned("ada", at(1))], reviews, [])
+
+        self.assertEqual(
+            result.outstanding, (), "the reviews path is unchanged"
         )
 
 
@@ -370,6 +467,11 @@ def at(day, hour=10):
 def assigned(login, when):
     """An `assigned` timeline event."""
     return {"event": "assigned", "assignee": {"login": login}, "created_at": when}
+
+
+def comment(login, when, kind="User"):
+    """An ordinary issue comment on the pull request."""
+    return {"user": {"login": login, "type": kind}, "created_at": when}
 
 
 def moment(day, hour=10):

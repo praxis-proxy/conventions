@@ -40,29 +40,46 @@ GitHub-hosted `ubuntu-24.04` image satisfies.
 
 ## What Counts As A Response
 
-A response is a **submitted** review in one of four states:
-`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, or `DISMISSED`.
+Either of two things:
 
-A review only counts with a usable `submitted_at`. That timestamp is
-the evidence it was submitted rather than merely started; a review in
-a counting state without one is reported, not assumed either way.
+- A **submitted** review in one of four states: `APPROVED`,
+  `CHANGES_REQUESTED`, `COMMENTED`, or `DISMISSED`.
+- An ordinary **comment** on the pull request from the assignee.
+
+Both need a usable timestamp, `submitted_at` on a review and
+`created_at` on a comment. On a review that timestamp is also the
+evidence it was submitted rather than merely started. Anything in a
+counting state without one is reported, not assumed either way.
+
+A comment counts because the tracker measures whether somebody
+responded, never whether the response was useful, and a review saying
+"lgtm" already stops the timer. Judging the mechanism rather than the
+fact punished people who wrote a thorough review in the conversation
+instead of through the review UI, which is a distinction nobody making
+it is aware of. See [Responsiveness is not
+quality](#limitations) for the trade this accepts.
 
 Deliberately excluded:
 
 - Pending (unsubmitted) reviews. They carry no `submitted_at` and are
   invisible to everyone but their author.
-- Ordinary pull request comments and review-thread replies.
-- Reviews from accounts GitHub reports as apps.
+- Review-thread replies. These normally carry a
+  `pull_request_review_id` and so arrive with the reviews anyway;
+  somebody who only ever replies inside an existing thread is still
+  counted as outstanding.
+- Reviews and comments from accounts GitHub reports as apps. Comments
+  are filtered on account type as well as login, so the tracker's own
+  reminders cannot be read as answers to themselves.
 
-A review counts when it was submitted at or after the reviewer's
-current assignment began. A review given while the pull request was
-still a draft still counts: it is a real initial response.
+A response counts when it was made at or after the person's current
+assignment began. One given while the pull request was still a draft
+still counts: it is a real initial response.
 
-Only the most recent review from a person is weighed against their
+Only the most recent response from a person is weighed against their
 assignment, because that is the one that settles whether they have
-answered it. Reviewing a pull request and being assigned to it
-afterwards is ordinary, and that earlier review neither discharges the
-later assignment nor hides the review that does.
+answered it. Responding to a pull request and being assigned to it
+afterwards is ordinary, and that earlier response neither discharges
+the later assignment nor hides the one that does.
 
 ### Dismissal
 
@@ -76,7 +93,7 @@ What happens after a dismissal is a further review round, which this
 version does not track. See [Limitations](#limitations).
 
 Once somebody responds, their timer stops permanently for that
-assignment. Nothing else stops it: not an unrelated comment, not a
+assignment. Nothing else stops it: not somebody else's comment, not a
 push by the author, not a label change, not a dismissal.
 
 ## When The Clock Starts
@@ -327,7 +344,7 @@ The praxis-bot GitHub App token needs:
 | Scope | Level | Why |
 | --- | --- | --- |
 | Pull requests: read & write | Repository | List pull requests and reviews, post reminder comments |
-| Issues: read | Repository | Timeline events are served from the issues endpoint |
+| Issues: read | Repository | Timeline events and pull request comments are served from the issues endpoint |
 | Metadata: read | Repository | Mandatory for any installation |
 | Projects: read & write | Organization | Read and write the two project fields |
 
@@ -505,12 +522,15 @@ available before then:
   Tracking later review rounds is deliberately out of scope here.
 - **No holiday calendar.** A reminder can land during somebody's
   holiday or a public holiday in their country.
-- **Responsiveness is not quality.** Any submitted review stops the
-  timer, including a `COMMENTED` one that says nothing useful. The
-  tracker measures whether somebody responded, not whether the
-  response helped, and no mechanical check separates the two: an
-  empty body is detectable, "lgtm" is not. Filtering on content would
-  move the goalposts without closing the gap.
+- **Responsiveness is not quality.** Any submitted review or comment
+  stops the timer, including a `COMMENTED` review or a one-word
+  comment that says nothing useful. The tracker measures whether
+  somebody responded, not whether the response helped, and no
+  mechanical check separates the two: an empty body is detectable,
+  "lgtm" is not. Filtering on content would move the goalposts
+  without closing the gap, and filtering on mechanism — counting the
+  review UI but not the conversation — is worse, because it reports
+  somebody who wrote a detailed review as having said nothing.
 - **A duplicate reminder is possible in theory.** The workflow's
   concurrency group serializes runs per repository, so two scheduled
   or dispatched runs cannot overlap. If that is bypassed, say by a
