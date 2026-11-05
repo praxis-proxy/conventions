@@ -61,7 +61,7 @@ def summarize(outstanding, now):
     return text, oldest
 
 
-def track(pull, timeline, reviews):
+def track(pull, timeline, reviews, comments):
     """The current assignees of `pull` who still owe an initial review.
 
     A closed or draft pull request yields nobody, so re-running this against
@@ -69,20 +69,24 @@ def track(pull, timeline, reviews):
     pull request that has since been closed or sent back to draft.
 
     A person's wait starts at their current assignment, or at the most recent
-    draft-to-ready transition when that is later. A review submitted any time
-    after their assignment stops their timer, including one given while the
-    pull request was still a draft.
+    draft-to-ready transition when that is later. A submitted review or an
+    ordinary comment any time after their assignment stops their timer,
+    including one given while the pull request was still a draft.
 
     The timer stops for good. Dismissing that review afterwards does not
     restart it, because the initial response did happen; what follows a
     dismissal is a further review round, which this version does not track.
+
+    `comments` is required rather than defaulted because omitting it would
+    silently restore the reviews-only behavior, which is the bug this
+    argument exists to fix. Pass an empty sequence to mean "there are none".
     """
     if pull.get("state") != "open" or pull.get("draft"):
         return Tracking((), ())
 
     ambiguities = []
     ready_at = _latest_ready(timeline, ambiguities)
-    responses = _responses(reviews, ambiguities)
+    responses = _responses(reviews, comments, ambiguities)
 
     outstanding = []
     for login in _human_assignees(pull):
@@ -173,29 +177,39 @@ def _latest_ready(timeline, ambiguities):
     return latest
 
 
-def _responses(reviews, ambiguities):
-    """Latest submitted review per login.
+def _responses(reviews, comments, ambiguities):
+    """Latest response per login, from submitted reviews and from comments.
 
-    The question this answers is whether somebody reviewed at or after their
-    current assignment began, so the most recent review is the one that
-    settles it. Taking the earliest instead would let a review submitted
-    before the assignment mask every later one, leaving somebody who reviewed
-    a pull request and was assigned to it afterwards outstanding forever.
+    The question this answers is whether somebody responded at or after their
+    current assignment began, so the most recent response is the one that
+    settles it. Taking the earliest instead would let a response made before
+    the assignment mask every later one, leaving somebody who answered a pull
+    request and was assigned to it afterwards outstanding forever.
 
-    A review from a previous assignment still does not discharge the current
+    A response from a previous assignment still does not discharge the current
     one: it stays behind the new start, so the comparison fails as it should.
+
+    An ordinary comment counts for the same reason a `COMMENTED` review does.
+    The tracker measures whether somebody responded, never whether the
+    response was useful, and a review saying "lgtm" already stops the timer.
+    Judging the mechanism instead of the fact would ping people who wrote a
+    detailed review in the conversation rather than through the review UI,
+    which is a distinction nobody making it is aware of.
 
     A review only counts with a usable `submitted_at`, which is the evidence
     that it was submitted rather than merely started. A review in a counting
-    state without one is reported instead of assumed either way.
+    state without one is reported instead of assumed either way, and so is a
+    comment with no usable `created_at`.
 
-    PENDING reviews are excluded by state and carry no `submitted_at` anyway,
-    and ordinary issue comments are never read as reviews because they are not
-    in this feed. Reviews are matched to assignees by login, and bot accounts
-    are already excluded from the assignee list, so a bot review can never
-    discharge a person.
+    PENDING reviews are excluded by state and carry no `submitted_at` anyway.
+    Responses are matched to assignees by login and bot accounts are already
+    excluded from the assignee list, so neither a bot review nor a bot comment
+    can discharge a person; comments are filtered on account type regardless,
+    which makes the tracker's own reminders unable to count as answers to
+    themselves by construction rather than by coincidence.
     """
     latest = {}
+
     for review in reviews:
         state = (review.get("state") or "").upper()
         if state not in RESPONSE_STATES:
@@ -210,7 +224,25 @@ def _responses(reviews, ambiguities):
             ambiguities.append(f"@{login} has a {state} review with no submitted_at")
             continue
 
-        if login not in latest or moment > latest[login]:
-            latest[login] = moment
+        _keep_latest(latest, login, moment)
+
+    for comment in comments:
+        user = comment.get("user") or {}
+        login = user.get("login")
+        if not login or user.get("type") == "Bot" or login.endswith(BOT_SUFFIX):
+            continue
+
+        moment = parse_timestamp(comment.get("created_at"))
+        if moment is None:
+            ambiguities.append(f"@{login} has a comment with no created_at")
+            continue
+
+        _keep_latest(latest, login, moment)
 
     return latest
+
+
+def _keep_latest(latest, login, moment):
+    """Records `moment` as `login`'s response time when it is the newest one."""
+    if login not in latest or moment > latest[login]:
+        latest[login] = moment
