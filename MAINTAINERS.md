@@ -70,6 +70,7 @@ definitions and processes.
 | Ricardo Pchevuzinske Katz | Core, AI       | [@rikatz]         | Red Hat     |
 | Senan Zedan               | AI, Policy     | [@szedan-rh]      | Red Hat     |
 | Teryl Taylor              | Policy         | [@terylt]         | IBM         |
+| Twinkll Sisodia           | AI             | [@tsisodia10]     | Red Hat     |
 | Yehudit Kerido            | Policy         | [@yehuditkerido]  | Red Hat     |
 
 [@crstrn13]: https://github.com/crstrn13
@@ -92,6 +93,7 @@ definitions and processes.
 [@rikatz]: https://github.com/rikatz
 [@szedan-rh]: https://github.com/szedan-rh
 [@terylt]: https://github.com/terylt
+[@tsisodia10]: https://github.com/tsisodia10
 [@yehuditkerido]: https://github.com/yehuditkerido
 
 ## Emeritus
