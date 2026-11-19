@@ -1,14 +1,24 @@
-<!-- CI enforces a real description, conventional commit subjects,
-     Signed-off-by trailers, signed commits, and a 750-line size cap
-     on production code. See CONTRIBUTING.md. -->
+## Why are we doing this?
 
-## What?
+<!-- Explain the motivation and user or operational need. -->
 
-<!-- What does this PR change? -->
+## What are we fixing?
 
-## Why?
+<!-- Describe the current problem or gap, including its impact. -->
 
-<!-- Why is this change needed? Link the issue or epic. -->
+## How are we fixing it?
+
+<!-- Summarize the approach and why it is the smallest complete change. -->
+
+<!-- If this adds a filter parameter, explain why the parameter is needed,
+     what behavior it controls, and why existing configuration is insufficient. -->
+
+## Related issue
+
+<!-- Every PR must link the issue it addresses. Use "Closes #123" if this PR
+     completes the issue, or "Refs #123" if the issue remains open. -->
+
+Closes #
 
 ## Checklist
 

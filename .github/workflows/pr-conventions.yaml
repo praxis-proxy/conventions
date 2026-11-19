@@ -23,13 +23,25 @@ name: PR Conventions
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
   workflow_call:
     inputs:
       max-additions:
         description: Most non-test lines a PR may add before the size check fails
         type: number
         default: 750
+      context-only:
+        description: Run only the PR description and optional open PR limit checks
+        type: boolean
+        default: false
+      max-open-prs:
+        description: Maximum open PRs per author in this repository, including drafts (0 disables)
+        type: number
+        default: 0
+      description-team-bypass:
+        description: Allow the configured teams to bypass the description check
+        type: boolean
+        default: true
       bypass-teams:
         description: >-
           Comma-separated org team slugs whose members skip the description
@@ -82,7 +94,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   pr-size-check:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !inputs.context-only && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -438,7 +450,7 @@ jobs:
 
       - name: Check maintainer bypass
         id: maintainer-bypass
-        if: env.BOT_APP_AVAILABLE == 'true'
+        if: env.BOT_APP_AVAILABLE == 'true' && toJSON(inputs.description-team-bypass) != 'false'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ github.repository_owner }}
@@ -461,34 +473,201 @@ jobs:
           done
           echo "bypass=${bypass}" >> "$GITHUB_OUTPUT"
 
-      - name: Check for description
+      - name: Check for why, what, and how
         if: steps.maintainer-bypass.outputs.bypass != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          BOT_TOKEN: ${{ steps.app-token.outputs.token }}
           CONVENTIONS_DOC: ${{ inputs.conventions-doc || 'docs/conventions.md' }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          labels=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name')
+          labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels -q '.labels[].name')
           if echo "$labels" | grep -q '^skip/pr-conventions$'; then
             echo "skip/pr-conventions label present, skipping description check"
             exit 0
           fi
 
-          word_count=$(echo "$PR_BODY" | wc -w)
-          if [ "$word_count" -lt 2 ]; then
-            marker="<!-- conventions:pr-description-check -->"
-            already=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-              --jq "[.[] | select(.body | contains(\"${marker}\"))] | length")
-            if [ "$already" -eq 0 ]; then
-              gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
-                --body "${marker}
-          Please add a description to this PR explaining what it does and why. See our [coding conventions](${CONVENTIONS_DOC})." \
-                || echo "::warning::could not comment on the PR (fork and Dependabot PRs get a read-only token)"
+          missing=$(python3 - <<'PY'
+          import os
+          import re
+
+          body = re.sub(r"<!--.*?-->", "", os.environ.get("PR_BODY", ""), flags=re.DOTALL)
+          visible_lines = []
+          fence_char = None
+          fence_length = 0
+          for line in body.splitlines():
+              fence = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+              if fence_char is None:
+                  if fence:
+                      fence_char = fence.group(1)[0]
+                      fence_length = len(fence.group(1))
+                      continue
+              else:
+                  if (
+                      fence
+                      and fence.group(1)[0] == fence_char
+                      and len(fence.group(1)) >= fence_length
+                      and re.fullmatch(r" {0,3}(?:`{3,}|~{3,})\s*", line)
+                  ):
+                      fence_char = None
+                      fence_length = 0
+                  continue
+              visible_lines.append(line)
+
+          headings = {
+              "why": re.compile(r"^#{1,6}\s+why\b", re.IGNORECASE),
+              "what": re.compile(r"^#{1,6}\s+what\b", re.IGNORECASE),
+              "how": re.compile(r"^#{1,6}\s+how\b", re.IGNORECASE),
+          }
+          issue_reference = re.compile(
+              r"^\s*(?:closes?|fix(?:es|ed)?|resolves?|refs?|related to|part of)\s+(?:[\w.-]+/[\w.-]+)?#[1-9]\d*\b",
+              re.IGNORECASE,
+          )
+          sections = {}
+          current = None
+          current_level = None
+          for line in visible_lines:
+              heading = re.match(r"^(#{1,6})\s+(.*)$", line.strip())
+              if not heading:
+                  if current:
+                      sections[current].append(line)
+                  continue
+
+              level = len(heading.group(1))
+              title = heading.group(2)
+              match = next((name for name, pattern in headings.items() if pattern.match(line.strip())), None)
+              if match:
+                  current = match
+                  current_level = level
+                  sections.setdefault(current, [])
+              elif current and level <= current_level:
+                  current = None
+                  current_level = None
+
+          missing = []
+          for name in headings:
+              content = "\n".join(sections.get(name, []))
+              content = content.strip()
+              if not content:
+                  missing.append(name)
+          if not any(issue_reference.search(line) for line in visible_lines):
+              missing.append("issue")
+          print(" ".join(missing))
+          PY
+          )
+
+          if [ -n "$missing" ]; then
+            marker="<!-- praxis:pr-description-check-v3 -->"
+            details=""
+            for section in $missing; do
+              if [ "$section" = "issue" ]; then
+                details="${details}"$'\n- Related issue: add Closes #123 or Refs #123 for the issue this PR addresses.'
+              else
+                details="${details}"$'\n- '"${section^}"': add a short explanation under the section heading.'
+              fi
+            done
+            if [ -n "$BOT_TOKEN" ]; then
+              if ! already=$(gh api --paginate "repos/${GH_REPO}/issues/${PR_NUMBER}/comments?per_page=100" \
+                --jq ".[] | select(.body | contains(\"${marker}\")) | .id"); then
+                echo "::warning::Could not look up existing description comments"
+              elif [ -z "$already" ]; then
+                gh pr comment "$PR_NUMBER" --repo "$GH_REPO" \
+                  --body "${marker}
+          This PR needs non-empty **Why**, **What**, and **How** sections plus a linked issue reference.${details}
+
+          See [PR conventions](${CONVENTIONS_DOC})." \
+                  || echo "::warning::Could not post description guidance"
+              fi
             fi
-            echo "::error::PR has no description"
+            printf 'PR description requirements:%s\n' "$details" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::PR description or issue reference is missing: $missing"
             exit 1
           fi
+
+          echo "PR description contains non-empty Why, What, and How sections and links an issue."
+
+  # ----------------------------------------------------------------------------
+  # Author Open PR Limit
+  # ----------------------------------------------------------------------------
+
+  author-open-pr-limit:
+    if: inputs.max-open-prs > 0
+    permissions:
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BOT_APP_AVAILABLE: ${{ secrets.PRAXIS_BOT_APP_ID != '' }}
+    steps:
+      - name: Generate token
+        id: app-token
+        if: env.BOT_APP_AVAILABLE == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
+          private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Enforce the open PR limit
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MAX_OPEN_PRS: ${{ inputs.max-open-prs }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+
+          marker="<!-- praxis:author-open-pr-limit -->"
+          open_prs=$(gh pr list --repo "$GH_REPO" --author "$PR_AUTHOR" --state open \
+            --limit 1000 --json number,title,url,isDraft)
+          open_pr_count=$(jq 'length' <<< "$open_prs")
+          if ! jq -e --argjson current "$PR_NUMBER" \
+              'any(.[]; .number == $current)' <<< "$open_prs" >/dev/null; then
+            open_pr_count=$((open_pr_count + 1))
+          fi
+          comment_id=""
+          if [ "$BOT_APP_AVAILABLE" = true ]; then
+            comment_id=$(gh api --paginate "repos/${GH_REPO}/issues/${PR_NUMBER}/comments?per_page=100" \
+              --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | sed -n '1p') \
+              || echo "::warning::Could not look up the open PR limit comment"
+          fi
+
+          if [ "$open_pr_count" -gt "$MAX_OPEN_PRS" ]; then
+            other_prs=$(jq -r --argjson current "$PR_NUMBER" \
+              '.[] | select(.number != $current) | "- [#\(.number) \(.title)](\(.url))" + (if .isDraft then " (draft)" else "" end)' \
+              <<< "$open_prs")
+            body=$(cat <<EOF
+          ${marker}
+          **Open PR limit exceeded: ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}.**
+
+          This PR will not receive review attention until enough of your other PRs are merged to bring your total down to ${MAX_OPEN_PRS} or fewer. Draft PRs count. After merging them, edit or update this PR to refresh the check.
+
+          Other open PRs:
+          ${other_prs}
+          EOF
+          )
+            if [ -n "$comment_id" ]; then
+              gh api -X PATCH "repos/${GH_REPO}/issues/comments/${comment_id}" -f body="$body" >/dev/null \
+                || echo "::warning::Could not update the open PR limit comment"
+            elif [ "$BOT_APP_AVAILABLE" = true ]; then
+              gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body" \
+                || echo "::warning::Could not post the open PR limit comment"
+            fi
+            echo "::error::${PR_AUTHOR} has ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}. Draft PRs count."
+            exit 1
+          fi
+
+          if [ -n "$comment_id" ]; then
+            body="${marker}
+          **Open PR limit cleared:** you now have ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}. Draft PRs count."
+            gh api -X PATCH "repos/${GH_REPO}/issues/comments/${comment_id}" -f body="$body" >/dev/null \
+                || echo "::warning::Could not update the open PR limit comment"
+          fi
+
+          echo "${PR_AUTHOR} has ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}."
 
   # ----------------------------------------------------------------------------
   # Dependency Version Check
@@ -500,7 +679,7 @@ jobs:
   # exempts one dependency.
 
   dep-version-check:
-    if: ${{ !github.event.pull_request.draft && toJSON(inputs.dep-version-check) != 'false' }}
+    if: ${{ !inputs.context-only && !github.event.pull_request.draft && toJSON(inputs.dep-version-check) != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -576,7 +755,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   commit-message-check:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !inputs.context-only && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -636,7 +815,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   dco-check:
-    if: ${{ !github.event.pull_request.draft && toJSON(inputs.dco-check) != 'false' }}
+    if: ${{ !inputs.context-only && !github.event.pull_request.draft && toJSON(inputs.dco-check) != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -676,7 +855,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   signed-commits-check:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !inputs.context-only && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -715,7 +894,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   authorship-check:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !inputs.context-only && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

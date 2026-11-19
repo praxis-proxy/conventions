@@ -41,7 +41,8 @@ go through the [proposal process].
 CI enforces reviewability on every PR:
 
 - A maximum added lines count of production code (tests, docs, examples excluded)
-- A real description of what and why - `Signed-off-by`
+- Non-empty Why, What, and How sections and a linked issue
+- A `Signed-off-by`
   trailer on every commit (`git commit -s`)
 - Cryptographically signed commits (GPG or SSH)
 - Human authorship: commits authored or signed-off by tools are rejected

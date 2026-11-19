@@ -166,16 +166,28 @@ here. Ask a maintainer to triage the issue first.
 
 [triage]: ../.github/workflows/issue-triage.yaml
 
+### Open Pull Request Limit
+
+Repositories can set `max-open-prs` in both the PR conventions
+and assignment workflows. The limit applies per author and per
+repository, including drafts. Above the limit, the check fails
+and the assignment workflow skips the PR. Close or merge enough
+open PRs, then edit or update the waiting PR to rerun the checks.
+Callers using a limit should include `edited` and `synchronize`
+in both workflows' event lists.
+
 ### Pull Request Assignees
 
-Every pull request gets two assignees once it is ready
+By default, a pull request gets two assignees once it is ready
 for review: a maintainer from `core-maintainers` and
 a reviewer from `core-reviewers`. The [PR assignees][assignees]
 workflow assigns them when the PR is opened, reopened,
 or marked ready for review, so drafts wait until they
 are marked ready. Repositories that call the workflow
 pick their own teams with the `maintainer-teams` and
-`reviewer-teams` inputs.
+`reviewer-teams` inputs. Set `auto-assign-maintainer: false`
+to have the workflow assign a reviewer only and leave maintainer
+assignment to the repository team.
 
 The workflow never picks the PR author, never gives
 both roles to the same person, and goes for whoever is

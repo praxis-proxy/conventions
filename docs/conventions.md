@@ -664,8 +664,11 @@ its code. The gates:
   check runs normally. Other contributors should split
   larger changes into a stack of reviewable PRs. Override
   label: `skip/pr-conventions` (reviewers only).
-- **Description**: every PR must explain what it does and
-  why.
+- **Description**: ready PRs need non-empty **Why**, **What**, and
+  **How** sections and a related issue reference such as
+  `Closes #123` or `Refs #123`. If you add a filter parameter,
+  explain why it is needed, what it controls, and why existing
+  configuration is insufficient.
 - **Commit format**: subjects follow the conventional
   commit format above.
 - **DCO**: every commit carries a `Signed-off-by`
