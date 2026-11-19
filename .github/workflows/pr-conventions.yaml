@@ -608,7 +608,7 @@ jobs:
         with:
           app-id: ${{ secrets.PRAXIS_BOT_APP_ID }}
           private-key: ${{ secrets.PRAXIS_BOT_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          permission-pull-requests: write
 
       - name: Enforce the open PR limit
         env:
