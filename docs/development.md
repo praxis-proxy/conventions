@@ -4,7 +4,8 @@
 
 - Rust stable 1.96+
 - Rust nightly (for `rustfmt`)
-- `cargo-machete` (unused dependency detection)
+- `cargo-machete` 0.9.2 (unused dependency detection).
+  Install with `cargo install cargo-machete --version '=0.9.2' --locked`.
 - `cargo-audit`, `cargo-deny` (supply chain safety)
 - `cargo-llvm-cov` (coverage)
 - `cargo-semver-checks` (SemVer compliance, optional)
