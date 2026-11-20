@@ -171,11 +171,15 @@ here. Ask a maintainer to triage the issue first.
 
 Repositories can set `max-open-prs` in both the PR conventions
 and assignment workflows. The limit applies per author and per
-repository, including drafts. Above the limit, the check fails
+repository and includes drafts by default. Set
+`count-draft-prs: false` in both workflows to count only PRs
+ready for review. Above the limit, the check fails
 and the assignment workflow skips the PR. Close or merge enough
 open PRs, then edit or update the waiting PR to rerun the checks.
-Callers using a limit should include `edited` and `synchronize`
-in both workflows' event lists.
+Callers using a limit should include `edited`, `synchronize`,
+and `ready_for_review` in both workflows' event lists. When
+excluding drafts, include `converted_to_draft` in the conventions
+caller's events so the check refreshes when a PR becomes a draft.
 
 ### Pull Request Assignees
 

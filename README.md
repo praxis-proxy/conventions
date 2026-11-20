@@ -84,9 +84,9 @@ pinned to a tagged commit of this repository:
 
 | Workflow | Inputs |
 | --- | --- |
-| `pr-conventions.yaml` | `max-additions`, `context-only`, `max-open-prs`, `description-team-bypass`, `bypass-teams`, `conventions-doc`, `commit-subject-pattern`, `commit-subject-max-length`, `dco-check`, `dep-version-check` |
+| `pr-conventions.yaml` | `max-additions`, `context-only`, `max-open-prs`, `count-draft-prs`, `description-team-bypass`, `bypass-teams`, `conventions-doc`, `commit-subject-pattern`, `commit-subject-max-length`, `dco-check`, `dep-version-check` |
 | `pr-housekeeping.yaml` | `stale-draft-days`, `stale-days` |
-| `pr-assignees.yaml` | `maintainer-teams`, `reviewer-teams`, `max-open-prs`, `auto-assign-maintainer` |
+| `pr-assignees.yaml` | `maintainer-teams`, `reviewer-teams`, `max-open-prs`, `count-draft-prs`, `auto-assign-maintainer` |
 | `pr-review-tracker.yaml` | `dry-run`, `apply-project`, `apply-reminders`, `project-number` |
 | `issue-triage.yaml` | `policy-doc` |
 | `automated-review.yaml` | `pr_number`, `model`, `prompt-path`, `cloud-ml-region`, `gcp-project-id` |

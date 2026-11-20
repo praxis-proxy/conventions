@@ -38,9 +38,13 @@ on:
   workflow_call:
     inputs:
       max-open-prs:
-        description: Skip assignments above this per-author open PR limit, including drafts (0 disables)
+        description: Skip assignments above this per-author open PR limit (0 disables)
         type: number
         default: 0
+      count-draft-prs:
+        description: Count drafts toward the per-author open PR limit
+        type: boolean
+        default: true
       auto-assign-maintainer:
         description: Assign a maintainer automatically when the role is empty
         type: boolean
@@ -100,6 +104,7 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           # Comma-separated org team slugs. Every slug must be a real team: a
           # lookup that fails stops the run.
+          COUNT_DRAFT_PRS: ${{ toJSON(inputs.count-draft-prs) != 'false' }}
           MAX_OPEN_PRS: ${{ inputs.max-open-prs || 0 }}
           AUTO_ASSIGN_MAINTAINER: ${{ toJSON(inputs.auto-assign-maintainer) != 'false' }}
           MAINTAINER_TEAMS: ${{ inputs.maintainer-teams || 'core-maintainers' }}
@@ -109,12 +114,12 @@ jobs:
 
           if [ "$MAX_OPEN_PRS" -gt 0 ]; then
             open_prs=$(gh pr list --repo "$GH_REPO" --author "$PR_AUTHOR" --state open \
-              --limit 1000 --json number)
-            open_pr_count=$(jq 'length' <<< "$open_prs")
-            if ! jq -e --argjson current "$PR_NUMBER" \
-                'any(.[]; .number == $current)' <<< "$open_prs" >/dev/null; then
-              open_pr_count=$((open_pr_count + 1))
-            fi
+              --limit 1000 --json number,isDraft)
+            # Use the event for the current PR, since the list can omit it or
+            # still report it as a draft when it has just been marked ready.
+            open_prs=$(jq --argjson current "$PR_NUMBER" --argjson drafts "$COUNT_DRAFT_PRS" \
+              '[.[] | select(.number != $current and ($drafts or (.isDraft | not)))]' <<< "$open_prs")
+            open_pr_count=$(jq 'length + 1' <<< "$open_prs")
             if [ "$open_pr_count" -gt "$MAX_OPEN_PRS" ]; then
               echo "::notice::Author has ${open_pr_count} open PRs; skipping assignment (limit: ${MAX_OPEN_PRS})"
               exit 0
