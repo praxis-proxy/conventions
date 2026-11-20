@@ -35,9 +35,13 @@ on:
         type: boolean
         default: false
       max-open-prs:
-        description: Maximum open PRs per author in this repository, including drafts (0 disables)
+        description: Maximum open PRs per author in this repository (0 disables)
         type: number
         default: 0
+      count-draft-prs:
+        description: Count drafts toward the per-author open PR limit
+        type: boolean
+        default: true
       description-team-bypass:
         description: Allow the configured teams to bypass the description check
         type: boolean
@@ -593,7 +597,7 @@ jobs:
   # ----------------------------------------------------------------------------
 
   author-open-pr-limit:
-    if: inputs.max-open-prs > 0
+    if: inputs.max-open-prs > 0 && (inputs.count-draft-prs || !github.event.pull_request.draft)
     permissions:
       pull-requests: read
     runs-on: ubuntu-24.04
@@ -615,6 +619,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          COUNT_DRAFT_PRS: ${{ toJSON(inputs.count-draft-prs) != 'false' }}
           MAX_OPEN_PRS: ${{ inputs.max-open-prs }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
@@ -623,10 +628,14 @@ jobs:
           marker="<!-- praxis:author-open-pr-limit -->"
           open_prs=$(gh pr list --repo "$GH_REPO" --author "$PR_AUTHOR" --state open \
             --limit 1000 --json number,title,url,isDraft)
-          open_pr_count=$(jq 'length' <<< "$open_prs")
-          if ! jq -e --argjson current "$PR_NUMBER" \
-              'any(.[]; .number == $current)' <<< "$open_prs" >/dev/null; then
-            open_pr_count=$((open_pr_count + 1))
+          # Use the event for the current PR, since the list can omit it or
+          # still report it as a draft when it has just been marked ready.
+          open_prs=$(jq --argjson current "$PR_NUMBER" --argjson drafts "$COUNT_DRAFT_PRS" \
+            '[.[] | select(.number != $current and ($drafts or (.isDraft | not)))]' <<< "$open_prs")
+          open_pr_count=$(jq 'length + 1' <<< "$open_prs")
+          draft_policy="Draft PRs count."
+          if [ "$COUNT_DRAFT_PRS" = false ]; then
+            draft_policy="Only PRs ready for review count."
           fi
           comment_id=""
           if [ "$BOT_APP_AVAILABLE" = true ]; then
@@ -636,14 +645,14 @@ jobs:
           fi
 
           if [ "$open_pr_count" -gt "$MAX_OPEN_PRS" ]; then
-            other_prs=$(jq -r --argjson current "$PR_NUMBER" \
-              '.[] | select(.number != $current) | "- [#\(.number) \(.title)](\(.url))" + (if .isDraft then " (draft)" else "" end)' \
+            other_prs=$(jq -r \
+              '.[] | "- [#\(.number) \(.title)](\(.url))" + (if .isDraft then " (draft)" else "" end)' \
               <<< "$open_prs")
             body=$(cat <<EOF
           ${marker}
           **Open PR limit exceeded: ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}.**
 
-          This PR will not receive review attention until enough of your other PRs are merged to bring your total down to ${MAX_OPEN_PRS} or fewer. Draft PRs count. After merging them, edit or update this PR to refresh the check.
+          This PR will not receive review attention until your total drops to ${MAX_OPEN_PRS} or fewer. ${draft_policy} Once under the limit, edit or update this PR to refresh the check.
 
           Other open PRs:
           ${other_prs}
@@ -656,13 +665,13 @@ jobs:
               gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body" \
                 || echo "::warning::Could not post the open PR limit comment"
             fi
-            echo "::error::${PR_AUTHOR} has ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}. Draft PRs count."
+            echo "::error::${PR_AUTHOR} has ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}. ${draft_policy}"
             exit 1
           fi
 
           if [ -n "$comment_id" ]; then
             body="${marker}
-          **Open PR limit cleared:** you now have ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}. Draft PRs count."
+          **Open PR limit cleared:** you now have ${open_pr_count} open PRs; the maximum is ${MAX_OPEN_PRS}. ${draft_policy}"
             gh api -X PATCH "repos/${GH_REPO}/issues/comments/${comment_id}" -f body="$body" >/dev/null \
                 || echo "::warning::Could not update the open PR limit comment"
           fi
