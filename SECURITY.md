@@ -4,6 +4,7 @@
 
 | Version | Supported  |
 | ------- | ---------- |
+| 0.6.x   | No (Alpha) |
 | 0.1.x   | No (Alpha) |
 
 ## Reporting a Vulnerability
