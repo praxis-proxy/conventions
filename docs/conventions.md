@@ -666,7 +666,8 @@ its code. The gates:
   label: `skip/pr-conventions` (reviewers only).
 - **Description**: ready PRs need non-empty **Why**, **What**, and
   **How** sections and a related issue reference such as
-  `Closes #123` or `Refs #123`. Dependabot and Praxis Bot PRs skip
+  `Closes #123` or `Refs #123`, or a Markdown link to the GitHub Actions
+  job the PR addresses. Dependabot and Praxis Bot PRs skip
   this check. If you add a filter parameter,
   explain why it is needed, what it controls, and why existing
   configuration is insufficient.

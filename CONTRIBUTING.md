@@ -41,7 +41,8 @@ go through the [proposal process].
 CI enforces these reviewability checks:
 
 - A maximum added lines count of production code (tests, docs, examples excluded)
-- Non-empty Why, What, and How sections and a linked issue on ready PRs,
+- Non-empty Why, What, and How sections and a linked issue or relevant GitHub Actions job
+  on ready PRs,
   except those opened by Dependabot or Praxis Bot
 - A `Signed-off-by`
   trailer on every commit (`git commit -s`)

@@ -532,6 +532,10 @@ jobs:
               r"^\s*(?:closes?|fix(?:es|ed)?|resolves?|refs?|related to|part of)\s+(?:[\w.-]+/[\w.-]+)?#[1-9]\d*\b",
               re.IGNORECASE,
           )
+          ci_job_reference = re.compile(
+              r"\[[^\]\n]+\]\(https://github\.com/[\w.-]+/[\w.-]+"
+              r"/actions/runs/[1-9]\d*/job/[1-9]\d+(?:#step:[1-9]\d*:[1-9]\d*)?\)"
+          )
           sections = {}
           current = None
           current_level = None
@@ -559,7 +563,10 @@ jobs:
               content = content.strip()
               if not content:
                   missing.append(name)
-          if not any(issue_reference.search(line) for line in visible_lines):
+          if not any(
+              issue_reference.search(line) or ci_job_reference.search(line)
+              for line in visible_lines
+          ):
               missing.append("issue")
           print(" ".join(missing))
           PY
@@ -570,7 +577,7 @@ jobs:
             details=""
             for section in $missing; do
               if [ "$section" = "issue" ]; then
-                details="${details}"$'\n- Related issue: add Closes #123 or Refs #123 for the issue this PR addresses.'
+                details="${details}"$'\n- Related issue: add Closes #123 or Refs #123, or link the GitHub Actions job this PR addresses.'
               else
                 details="${details}"$'\n- '"${section^}"': add a short explanation under the section heading.'
               fi
@@ -582,7 +589,7 @@ jobs:
               elif [ -z "$already" ]; then
                 gh pr comment "$PR_NUMBER" --repo "$GH_REPO" \
                   --body "${marker}
-          This PR needs non-empty **Why**, **What**, and **How** sections plus a linked issue reference.${details}
+          This PR needs non-empty **Why**, **What**, and **How** sections plus a related issue reference or a link to the GitHub Actions job it addresses.${details}
 
           See [PR conventions](${CONVENTIONS_DOC})." \
                   || echo "::warning::Could not post description guidance"
@@ -593,7 +600,7 @@ jobs:
             exit 1
           fi
 
-          echo "PR description contains non-empty Why, What, and How sections and links an issue."
+          echo "PR description contains non-empty Why, What, and How sections and a related reference."
 
   # ----------------------------------------------------------------------------
   # Author Open PR Limit
